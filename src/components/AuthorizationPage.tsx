@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Send, Loader2, CheckCircle, AlertCircle, ExternalLink, Copy, Key, User, Zap } from 'lucide-react';
+import { Send, Loader2, CheckCircle, AlertCircle, ExternalLink, Copy, Key, User, Zap, Globe } from 'lucide-react';
 import { ethers } from 'ethers';
 import { useEnvWallet } from '../hooks/useEnvWallet';
 import { tenderlySimulator } from '../utils/tenderly';
@@ -11,11 +11,35 @@ interface TransactionStatus {
   simulationUrl?: string;
 }
 
+const NETWORKS = [
+  { id: 1, name: 'Ethereum', currency: 'ETH' },
+  { id: 56, name: 'BSC', currency: 'BNB' },
+  { id: 137, name: 'Polygon', currency: 'MATIC' },
+  { id: 42161, name: 'Arbitrum', currency: 'ETH' },
+  { id: 10, name: 'Optimism', currency: 'ETH' },
+  { id: 8453, name: 'Base', currency: 'ETH' },
+  { id: 11155111, name: 'Sepolia', currency: 'ETH' },
+];
+
 export const AuthorizationPage: React.FC = () => {
-  const { userWallet, relayerWallet, provider, userAddress, relayerAddress, updateUserPrivateKey, currentUserPrivateKey } = useEnvWallet();
+  const { 
+    userWallet, 
+    relayerWallet, 
+    provider, 
+    userAddress, 
+    relayerAddress, 
+    userBalance,
+    relayerBalance,
+    chainId,
+    updateUserPrivateKey, 
+    currentUserPrivateKey,
+    refreshBalances 
+  } = useEnvWallet();
+  
   const [privateKey, setPrivateKey] = useState(currentUserPrivateKey || '');
   const [delegateAddress, setDelegateAddress] = useState('');
   const [gasLimit, setGasLimit] = useState('40000');
+  const [selectedNetwork, setSelectedNetwork] = useState<number>(chainId || 1);
   const [txStatus, setTxStatus] = useState<TransactionStatus>({
     hash: null,
     status: 'idle',
@@ -69,11 +93,11 @@ export const AuthorizationPage: React.FC = () => {
 
       const userNonce = await provider.getTransactionCount(userAddress!);
       const network = await provider.getNetwork();
-      const chainId = Number(network.chainId);
+      const currentChainId = Number(network.chainId);
 
       // Prepare EIP-7702 authorization data
       const authData = {
-        chainId,
+        chainId: currentChainId,
         address: delegateAddress,
         nonce: ethers.toBeHex(userNonce),
       };
@@ -106,7 +130,7 @@ export const AuthorizationPage: React.FC = () => {
       if (tenderlySimulator.isEnabled()) {
         setTxStatus({ hash: null, status: 'pending', message: 'Running simulation...' });
         simulationResult = await tenderlySimulator.simulateEIP7702Authorization(
-          chainId,
+          currentChainId,
           userAddress!,
           delegateAddress,
           relayerAddress!,
@@ -169,17 +193,32 @@ export const AuthorizationPage: React.FC = () => {
     }
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-white mb-2">EIP-7702 Authorization</h1>
-        <p className="text-gray-400">Delegate account execution to a smart contract</p>
-      </div>
+  const currentNetwork = NETWORKS.find(n => n.id === (chainId || selectedNetwork));
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Form */}
-        <div className="lg:col-span-2 space-y-6">
+  return (
+    <div className="max-w-6xl mx-auto">
+      <div className="grid grid-cols-12 gap-6">
+        {/* Main Content */}
+        <div className="col-span-8 space-y-4">
+          {/* Network Selection */}
+          <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Globe className="w-4 h-4 text-gray-400" />
+              <h3 className="text-sm font-medium text-white">Network</h3>
+            </div>
+            <select
+              value={selectedNetwork}
+              onChange={(e) => setSelectedNetwork(Number(e.target.value))}
+              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            >
+              {NETWORKS.map((network) => (
+                <option key={network.id} value={network.id}>
+                  {network.name} ({network.currency})
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Private Key Input */}
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-3">
@@ -202,7 +241,7 @@ export const AuthorizationPage: React.FC = () => {
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
             <h3 className="text-sm font-medium text-white mb-4">Authorization Parameters</h3>
             
-            <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-gray-400 mb-2">
                   Delegate Contract Address
@@ -231,32 +270,32 @@ export const AuthorizationPage: React.FC = () => {
                   className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 />
               </div>
-
-              <button
-                onClick={handleAuthorize}
-                disabled={
-                  !userWallet ||
-                  !delegateAddress ||
-                  !isValidAddress(delegateAddress) ||
-                  !isValidPrivateKey(privateKey) ||
-                  txStatus.status === 'pending'
-                }
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                data-testid="auth-button"
-              >
-                {txStatus.status === 'pending' ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4" />
-                    Authorize
-                  </>
-                )}
-              </button>
             </div>
+
+            <button
+              onClick={handleAuthorize}
+              disabled={
+                !userWallet ||
+                !delegateAddress ||
+                !isValidAddress(delegateAddress) ||
+                !isValidPrivateKey(privateKey) ||
+                txStatus.status === 'pending'
+              }
+              className="w-full mt-4 bg-blue-600 text-white py-2 px-4 rounded text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              data-testid="auth-button"
+            >
+              {txStatus.status === 'pending' ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  Authorize
+                </>
+              )}
+            </button>
           </div>
 
           {/* Transaction Status */}
@@ -285,7 +324,7 @@ export const AuthorizationPage: React.FC = () => {
                   className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs mt-2"
                 >
                   <ExternalLink className="w-3 h-3" />
-                  View in Tenderly
+                  View in Tenderly Dashboard
                 </a>
               )}
             </div>
@@ -293,7 +332,19 @@ export const AuthorizationPage: React.FC = () => {
         </div>
 
         {/* Sidebar */}
-        <div className="space-y-4">
+        <div className="col-span-4 space-y-4">
+          {/* Current Network */}
+          <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Globe className="w-4 h-4 text-green-400" />
+              <h3 className="text-sm font-medium text-white">Current Network</h3>
+            </div>
+            <div className="text-sm text-gray-300">
+              {currentNetwork?.name || 'Unknown'} ({currentNetwork?.currency || 'ETH'})
+            </div>
+            <div className="text-xs text-gray-500 mt-1">Chain ID: {chainId || selectedNetwork}</div>
+          </div>
+
           {/* User Wallet Status */}
           {userAddress && (
             <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
@@ -301,7 +352,12 @@ export const AuthorizationPage: React.FC = () => {
                 <User className="w-4 h-4 text-blue-400" />
                 <h3 className="text-sm font-medium text-white">User Wallet</h3>
               </div>
-              <div className="text-xs text-gray-400 font-mono">{userAddress}</div>
+              <div className="text-xs text-gray-400 font-mono mb-2">{userAddress}</div>
+              {userBalance && (
+                <div className="text-xs text-gray-300">
+                  Balance: {parseFloat(userBalance).toFixed(4)} {currentNetwork?.currency || 'ETH'}
+                </div>
+              )}
             </div>
           )}
 
@@ -312,9 +368,22 @@ export const AuthorizationPage: React.FC = () => {
                 <Zap className="w-4 h-4 text-purple-400" />
                 <h3 className="text-sm font-medium text-white">Relayer</h3>
               </div>
-              <div className="text-xs text-gray-400 font-mono">{relayerAddress}</div>
+              <div className="text-xs text-gray-400 font-mono mb-2">{relayerAddress}</div>
+              {relayerBalance && (
+                <div className="text-xs text-gray-300">
+                  Balance: {parseFloat(relayerBalance).toFixed(4)} {currentNetwork?.currency || 'ETH'}
+                </div>
+              )}
             </div>
           )}
+
+          {/* Refresh Balances */}
+          <button
+            onClick={refreshBalances}
+            className="w-full bg-gray-700 text-white py-2 px-4 rounded text-sm font-medium hover:bg-gray-600 transition-colors"
+          >
+            Refresh Balances
+          </button>
 
           {/* Info */}
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Send, ArrowUpRight, Coins, Target, Loader2, CheckCircle, AlertCircle, ExternalLink, Copy, Trash2, Plus } from 'lucide-react';
+import { Send, ArrowUpRight, Coins, Target, Loader2, CheckCircle, AlertCircle, ExternalLink, Copy, Trash2, Plus, Globe, Zap } from 'lucide-react';
 import { ethers } from 'ethers';
 import { useEnvWallet } from '../hooks/useEnvWallet';
 import { tenderlySimulator } from '../utils/tenderly';
@@ -24,10 +24,21 @@ interface SequenceOperation {
 
 type FunctionType = 'sendETH' | 'sweepETH' | 'sweepTokens' | 'executeCall' | 'customSequence';
 
+const NETWORKS = [
+  { id: 1, name: 'Ethereum', currency: 'ETH' },
+  { id: 56, name: 'BSC', currency: 'BNB' },
+  { id: 137, name: 'Polygon', currency: 'MATIC' },
+  { id: 42161, name: 'Arbitrum', currency: 'ETH' },
+  { id: 10, name: 'Optimism', currency: 'ETH' },
+  { id: 8453, name: 'Base', currency: 'ETH' },
+  { id: 11155111, name: 'Sepolia', currency: 'ETH' },
+];
+
 export const SweeperPage: React.FC = () => {
-  const { relayerWallet, provider, relayerAddress } = useEnvWallet();
+  const { relayerWallet, provider, relayerAddress, relayerBalance, chainId, refreshBalances } = useEnvWallet();
   const [contractAddress, setContractAddress] = useState('');
   const [selectedFunction, setSelectedFunction] = useState<FunctionType>('sendETH');
+  const [selectedNetwork, setSelectedNetwork] = useState<number>(chainId || 1);
   const [recipientAddress, setRecipientAddress] = useState('');
   const [tokenAddress, setTokenAddress] = useState('');
   const [callTarget, setCallTarget] = useState('');
@@ -424,41 +435,75 @@ export const SweeperPage: React.FC = () => {
     }
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-white mb-2">Sweeper Contract</h1>
-        <p className="text-gray-400">Execute contract functions via relayer</p>
-      </div>
+  const currentNetwork = NETWORKS.find(n => n.id === (chainId || selectedNetwork));
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+  const isExecuteDisabled = () => {
+    if (!relayerWallet || !provider || !contractAddress || !isValidAddress(contractAddress) || txResult.status === 'pending') {
+      return true;
+    }
+
+    switch (selectedFunction) {
+      case 'sweepTokens':
+        return !tokenAddress || !isValidAddress(tokenAddress);
+      case 'executeCall':
+        return !callTarget || !isValidAddress(callTarget);
+      case 'customSequence':
+        return sequenceOperations.length === 0;
+      default:
+        return false;
+    }
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto">
+      <div className="grid grid-cols-12 gap-6">
         {/* Function Selection */}
-        <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
-          <h3 className="text-sm font-medium text-white mb-3">Functions</h3>
-          <div className="space-y-1">
-            {functions.map((func) => {
-              const IconComponent = func.icon;
-              return (
-                <button
-                  key={func.id}
-                  onClick={() => setSelectedFunction(func.id)}
-                  className={`w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
-                    selectedFunction === func.id
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                  }`}
-                >
-                  <IconComponent className="w-4 h-4" />
-                  {func.name}
-                </button>
-              );
-            })}
+        <div className="col-span-3">
+          <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
+            <h3 className="text-sm font-medium text-white mb-3">Functions</h3>
+            <div className="space-y-1">
+              {functions.map((func) => {
+                const IconComponent = func.icon;
+                return (
+                  <button
+                    key={func.id}
+                    onClick={() => setSelectedFunction(func.id)}
+                    className={`w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
+                      selectedFunction === func.id
+                        ? 'bg-blue-600 text-white'
+                        : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    }`}
+                  >
+                    <IconComponent className="w-4 h-4" />
+                    {func.name}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
         {/* Main Form */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="col-span-6 space-y-4">
+          {/* Network Selection */}
+          <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Globe className="w-4 h-4 text-gray-400" />
+              <h3 className="text-sm font-medium text-white">Network</h3>
+            </div>
+            <select
+              value={selectedNetwork}
+              onChange={(e) => setSelectedNetwork(Number(e.target.value))}
+              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            >
+              {NETWORKS.map((network) => (
+                <option key={network.id} value={network.id}>
+                  {network.name} ({network.currency})
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Contract Address */}
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
             <label className="block text-xs font-medium text-gray-400 mb-2">Contract Address</label>
@@ -469,6 +514,9 @@ export const SweeperPage: React.FC = () => {
               placeholder="0x..."
               className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
             />
+            {contractAddress && !isValidAddress(contractAddress) && (
+              <p className="text-red-400 text-xs mt-1">Invalid contract address</p>
+            )}
           </div>
 
           {/* Function Parameters */}
@@ -480,13 +528,7 @@ export const SweeperPage: React.FC = () => {
           {/* Execute Button */}
           <button
             onClick={handleExecute}
-            disabled={
-              !relayerWallet ||
-              !provider ||
-              !contractAddress ||
-              !isValidAddress(contractAddress) ||
-              txResult.status === 'pending'
-            }
+            disabled={isExecuteDisabled()}
             className="w-full bg-blue-600 text-white py-2 px-4 rounded text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {txResult.status === 'pending' ? (
@@ -528,7 +570,7 @@ export const SweeperPage: React.FC = () => {
                   className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs mt-2"
                 >
                   <ExternalLink className="w-3 h-3" />
-                  View in Tenderly
+                  View in Tenderly Dashboard
                 </a>
               )}
             </div>
@@ -536,9 +578,38 @@ export const SweeperPage: React.FC = () => {
         </div>
 
         {/* Sidebar Info */}
-        <div className="space-y-4">
+        <div className="col-span-3 space-y-4">
+          {/* Current Network */}
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-white mb-2">Contract Info</h3>
+            <div className="flex items-center gap-2 mb-3">
+              <Globe className="w-4 h-4 text-green-400" />
+              <h3 className="text-sm font-medium text-white">Current Network</h3>
+            </div>
+            <div className="text-sm text-gray-300">
+              {currentNetwork?.name || 'Unknown'} ({currentNetwork?.currency || 'ETH'})
+            </div>
+            <div className="text-xs text-gray-500 mt-1">Chain ID: {chainId || selectedNetwork}</div>
+          </div>
+
+          {/* Relayer Info */}
+          {relayerAddress && (
+            <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Zap className="w-4 h-4 text-purple-400" />
+                <h3 className="text-sm font-medium text-white">Relayer</h3>
+              </div>
+              <div className="text-xs text-gray-400 font-mono mb-2">{relayerAddress}</div>
+              {relayerBalance && (
+                <div className="text-xs text-gray-300">
+                  Balance: {parseFloat(relayerBalance).toFixed(4)} {currentNetwork?.currency || 'ETH'}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Contract Info */}
+          <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
+            <h3 className="text-sm font-medium text-white mb-2">Contract</h3>
             {contractAddress ? (
               <div className="text-xs text-gray-400 font-mono break-all">{contractAddress}</div>
             ) : (
@@ -546,12 +617,21 @@ export const SweeperPage: React.FC = () => {
             )}
           </div>
 
+          {/* Selected Function */}
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
             <h3 className="text-sm font-medium text-white mb-2">Function</h3>
             <div className="text-xs text-gray-400">
               {functions.find(f => f.id === selectedFunction)?.name || 'None selected'}
             </div>
           </div>
+
+          {/* Refresh Balances */}
+          <button
+            onClick={refreshBalances}
+            className="w-full bg-gray-700 text-white py-2 px-4 rounded text-sm font-medium hover:bg-gray-600 transition-colors"
+          >
+            Refresh Balances
+          </button>
         </div>
       </div>
     </div>
