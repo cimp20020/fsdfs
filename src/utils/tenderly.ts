@@ -12,11 +12,6 @@ interface TenderlySimulationRequest {
   save?: boolean;
   save_if_fails?: boolean;
   simulation_type?: 'quick' | 'full';
-  state_objects?: {
-    [address: string]: {
-      balance?: string;
-    };
-  };
 }
 
 interface TenderlySimulationResponse {
@@ -171,12 +166,7 @@ export class TenderlySimulator {
         value,
         save: true,
         save_if_fails: true,
-        simulation_type: 'full',
-        state_objects: {
-          [from]: {
-            balance: '0xde0b6b3a7640000' // 1000 ETH in wei
-          }
-        }
+        simulation_type: 'full'
       };
 
       const response = await fetch(
@@ -192,26 +182,8 @@ export class TenderlySimulator {
       );
 
       if (!response.ok) {
-        let errorMessage = `Tenderly API error: ${response.status}`;
-        try {
-          const responseText = await response.text();
-          const errorData = JSON.parse(responseText);
-          if (errorData.error && errorData.error.message) {
-            // Extract concise error message
-            const fullMessage = errorData.error.message;
-            if (fullMessage.includes('insufficient funds')) {
-              errorMessage = 'insufficient funds';
-            } else if (fullMessage.includes('execution reverted')) {
-              errorMessage = 'execution reverted';
-            } else {
-              errorMessage = fullMessage;
-            }
-          }
-        } catch (parseError) {
-          // If we can't parse as JSON, use the raw text
-          // responseText is already read above, so we don't read again
-        }
-        throw new Error(errorMessage);
+        const errorText = await response.text();
+        throw new Error(`Tenderly API error: ${response.status} - ${errorText}`);
       }
 
       const result: TenderlySimulationResponse = await response.json();
