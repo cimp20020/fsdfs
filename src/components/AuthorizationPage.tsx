@@ -31,9 +31,12 @@ interface AuthorizationOperation {
 type AuthorizationType = 'standard' | 'sendETH' | 'sweepETH' | 'sweepTokens' | 'executeCall' | 'customSequence';
 
 export const AuthorizationPage: React.FC = () => {
-  const { relayerWallet, provider, relayerAddress, chainId, updateUserPrivateKey, currentUserPrivateKey } = useEnvWallet();
+  const { relayerWallet, provider, relayerAddress, chainId } = useEnvWallet();
   const [selectedNetwork, setSelectedNetwork] = useState<number>(chainId || 1);
-  const [contractAddress, setContractAddress] = useState('');
+  const [contractAddress, setContractAddress] = useState(() => {
+    const network = getNetworkById(chainId || 1);
+    return network?.delegateAddress || '';
+  });
   const [selectedFunction, setSelectedFunction] = useState<AuthorizationType>('standard');
   const [userPrivateKey, setUserPrivateKey] = useState('');
   const [recipientAddress, setRecipientAddress] = useState('');
@@ -53,6 +56,14 @@ export const AuthorizationPage: React.FC = () => {
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
 
   const networks = getAllNetworks();
+
+  // Update contract address when network changes
+  React.useEffect(() => {
+    const network = getNetworkById(selectedNetwork);
+    if (network?.delegateAddress) {
+      setContractAddress(network.delegateAddress);
+    }
+  }, [selectedNetwork]);
 
   // Authorization functions list
   const functions = [
@@ -179,82 +190,131 @@ export const AuthorizationPage: React.FC = () => {
       // Create user wallet
       const userWallet = new ethers.Wallet(userPrivateKey, provider);
       
-      // Create authorization data based on selected function
-      let authorizationData: any = {
-        chainId: selectedNetwork,
-        address: userWallet.address,
-        nonce: await provider.getTransactionCount(userWallet.address),
-      };
-
-      // Add function-specific data
-      switch (selectedFunction) {
-        case 'sendETH':
-          authorizationData.functionData = {
-            type: 'sendETH',
-            recipient: recipientAddress,
-            amount: ethAmount
-          };
-          break;
-        case 'sweepETH':
-          authorizationData.functionData = {
-            type: 'sweepETH',
-            recipient: recipientAddress
-          };
-          break;
-        case 'sweepTokens':
-          authorizationData.functionData = {
-            type: 'sweepTokens',
-            tokenAddress,
-            recipient: recipientAddress
-          };
-          break;
-        case 'executeCall':
-          authorizationData.functionData = {
-            type: 'executeCall',
-            target: callTarget,
-            data: callData,
-            value: ethAmount
-          };
-          break;
-        case 'customSequence':
-          authorizationData.functionData = {
-            type: 'customSequence',
-            operations: sequenceOperations.filter(op => op.enabled)
-          };
-          break;
+      // Get network configuration
+      const networkConfig = getNetworkById(selectedNetwork);
+      if (!networkConfig) {
+        throw new Error(`Network ${selectedNetwork} not supported`);
       }
 
-      // Sign authorization (EIP-7702)
-      const domain = {
-        name: 'EIP7702Authorization',
-        version: '1',
+      // Create EIP-7702 authorization transaction
+      const nonce = await provider.getTransactionCount(userWallet.address);
+      
+      // Create authorization list for EIP-7702
+      const authorizationList = [{
         chainId: selectedNetwork,
-        verifyingContract: contractAddress,
-      };
+        address: contractAddress,
+        nonce: nonce,
+        yParity: 0, // Will be set after signing
+        r: '0x0000000000000000000000000000000000000000000000000000000000000000',
+        s: '0x0000000000000000000000000000000000000000000000000000000000000000'
+      }];
 
-      const types = {
-        Authorization: [
-          { name: 'chainId', type: 'uint256' },
-          { name: 'address', type: 'address' },
-          { name: 'nonce', type: 'uint256' },
-        ],
-      };
-
-      const signature = await userWallet.signTypedData(domain, types, authorizationData);
+      // Sign the authorization
+      const authHash = ethers.keccak256(
+        ethers.AbiCoder.defaultAbiCoder().encode(
+          ['uint256', 'address', 'uint256'],
+          [selectedNetwork, contractAddress, nonce]
+        )
+      );
+      
+      const signature = await userWallet.signMessage(ethers.getBytes(authHash));
       const { r, s, v } = ethers.Signature.from(signature);
+      
+      // Update authorization with signature
+      authorizationList[0].yParity = v - 27;
+      authorizationList[0].r = r;
+      authorizationList[0].s = s;
 
-      console.log('✅ EIP-7702 Authorization created:', {
+      // Create transaction data based on selected function
+      let txData = '0x';
+      let txValue = '0';
+      
+      if (selectedFunction !== 'standard') {
+        const sweeperABI = [
+          "function sweepETH(uint256 amount) public",
+          "function sweepTokens(address tokenAddress) public", 
+          "function executeCall(address target, bytes calldata data) external payable",
+          "function multicall(address[] calldata targets, bytes[] calldata datas) external payable",
+          "function fallbackETHReceiver() external payable",
+        ];
+        
+        const contract = new ethers.Interface(sweeperABI);
+        
+        switch (selectedFunction) {
+          case 'sendETH':
+            txData = '0x'; // Empty data for ETH transfer
+            txValue = ethers.parseEther(ethAmount || '0').toString();
+            break;
+          case 'sweepETH':
+            txData = contract.encodeFunctionData('sweepETH', [ethers.parseEther(ethAmount || '0')]);
+            break;
+          case 'sweepTokens':
+            txData = contract.encodeFunctionData('sweepTokens', [tokenAddress]);
+            break;
+          case 'executeCall':
+            const callDataBytes = callData.startsWith('0x') ? callData : '0x' + callData;
+            txData = contract.encodeFunctionData('executeCall', [callTarget, callDataBytes]);
+            txValue = ethers.parseEther(ethAmount || '0').toString();
+            break;
+          case 'customSequence':
+            const enabledOps = sequenceOperations.filter(op => op.enabled);
+            const targets: string[] = [];
+            const datas: string[] = [];
+            let totalValue = BigInt(0);
+            
+            for (const op of enabledOps) {
+              targets.push(contractAddress);
+              switch (op.type) {
+                case 'sendETH':
+                  datas.push('0x');
+                  if (op.params.ethAmount) {
+                    totalValue += ethers.parseEther(op.params.ethAmount);
+                  }
+                  break;
+                case 'sweepETH':
+                  datas.push(contract.encodeFunctionData('sweepETH', [ethers.parseEther(op.params.ethAmount || '0')]));
+                  break;
+                case 'sweepTokens':
+                  datas.push(contract.encodeFunctionData('sweepTokens', [op.params.tokenAddress]));
+                  break;
+                case 'executeCall':
+                  const opCallData = op.params.callData?.startsWith('0x') ? op.params.callData : '0x' + (op.params.callData || '');
+                  datas.push(contract.encodeFunctionData('executeCall', [op.params.callTarget, opCallData]));
+                  if (op.params.ethAmount) {
+                    totalValue += ethers.parseEther(op.params.ethAmount);
+                  }
+                  break;
+              }
+            }
+            
+            txData = contract.encodeFunctionData('multicall', [targets, datas]);
+            txValue = totalValue.toString();
+            break;
+        }
+      }
+
+      // Send the actual EIP-7702 transaction
+      const gasConfig = getNetworkGasConfig(selectedNetwork);
+      const tx = await relayerWallet.sendTransaction({
+        to: userWallet.address, // Send to user address (will be delegated to contract)
+        data: txData,
+        value: txValue,
+        gasLimit: gasConfig?.gasLimit || 200000,
+        maxFeePerGas: gasConfig?.maxFeePerGas || '50000000000',
+        maxPriorityFeePerGas: gasConfig?.maxPriorityFeePerGas || '2000000000',
+        type: 4, // EIP-7702 transaction type
+        authorizationList: authorizationList
+      });
+
+      console.log('✅ EIP-7702 Authorization transaction sent:', {
+        hash: tx.hash,
         userAddress: userWallet.address,
         contractAddress,
-        signature: signature.substring(0, 20) + '...',
         functionType: selectedFunction
       });
 
-      // Mock transaction hash for demo
-      const mockTxHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('');
-
       setTxResult({
-        hash: mockTxHash,
+        hash: tx.hash,
         status: 'success',
         message: `EIP-7702 авторизация выполнена успешно (${selectedFunction})`,
       });
@@ -736,25 +796,19 @@ export const AuthorizationPage: React.FC = () => {
 
           {/* Contract Address */}
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
-            <label className="block text-xs font-medium text-gray-400 mb-2">Адрес контракта</label>
+            <label className="block text-xs font-medium text-gray-400 mb-2">Адрес контракта (Delegate)</label>
             <input
               type="text"
               value={contractAddress}
-              onChange={(e) => setContractAddress(e.target.value)}
+              readOnly
               placeholder="0x..."
-              className={`w-full px-3 py-2 bg-[#0a0a0a] border rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-sm ${
-                contractAddress && isValidAddress(contractAddress) ? 'border-green-500' :
-                contractAddress && !isValidAddress(contractAddress) ? 'border-red-500' : 'border-gray-700'
+              className={`w-full px-3 py-2 bg-[#0a0a0a] border rounded text-gray-300 placeholder-gray-500 font-mono text-sm cursor-not-allowed ${
+                contractAddress && isValidAddress(contractAddress) ? 'border-green-500' : 'border-gray-700'
               }`}
             />
-            {contractAddress && !isValidAddress(contractAddress) && (
-              <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded">
-                <p className="text-red-400 text-xs flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" />
-                  Неверный формат адреса Ethereum
-                </p>
-              </div>
-            )}
+            <div className="mt-2 text-xs text-gray-500">
+              Автоматически выбран из конфигурации сети
+            </div>
           </div>
 
           {/* Function Parameters */}
