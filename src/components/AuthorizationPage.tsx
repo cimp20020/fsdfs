@@ -271,10 +271,8 @@ export const AuthorizationPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="grid grid-cols-12 gap-6">
-        {/* Main Content */}
-        <div className="col-span-8 space-y-4">
+    <div className="max-w-4xl mx-auto">
+      <div className="space-y-4">
           {/* Network Selection */}
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-3">
@@ -490,69 +488,6 @@ export const AuthorizationPage: React.FC = () => {
           )}
         </div>
 
-        {/* Sidebar */}
-        <div className="col-span-4 space-y-4">
-          {/* Current Network */}
-          <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Globe className="w-4 h-4 text-green-400" />
-              <h3 className="text-sm font-medium text-white">Текущая сеть</h3>
-            </div>
-            <div className="text-sm text-gray-300">
-              {currentNetwork?.name || 'Неизвестно'} ({currentNetwork?.currency || 'ETH'})
-            </div>
-            <div className="text-xs text-gray-500 mt-1">Chain ID: {chainId || selectedNetwork}</div>
-          </div>
-
-          {/* User Wallet Status */}
-          {userAddress && (
-            <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <User className="w-4 h-4 text-blue-400" />
-                <h3 className="text-sm font-medium text-white">Кошелек пользователя</h3>
-              </div>
-              <div className="text-xs text-gray-400 font-mono mb-2">{userAddress}</div>
-              {userBalance && (
-                <div className="text-xs text-gray-300">
-                  Баланс: {parseFloat(userBalance).toFixed(4)} {currentNetwork?.currency || 'ETH'}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Relayer Wallet Status */}
-          {relayerAddress && (
-            <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Zap className="w-4 h-4 text-purple-400" />
-                <h3 className="text-sm font-medium text-white">Релейер</h3>
-              </div>
-              <div className="text-xs text-gray-400 font-mono mb-2">{relayerAddress}</div>
-              {relayerBalance && (
-                <div className="text-xs text-gray-300">
-                  Баланс: {parseFloat(relayerBalance).toFixed(4)} {currentNetwork?.currency || 'ETH'}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Refresh Balances */}
-          <button
-            onClick={refreshBalances}
-            className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors"
-          >
-            Обновить балансы
-          </button>
-
-          {/* Info */}
-          <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-white mb-2">О EIP-7702</h3>
-            <p className="text-xs text-gray-400 leading-relaxed">
-              EIP-7702 позволяет EOA временно делегировать выполнение смарт-контрактам, сохраняя при этом владение.
-            </p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };
