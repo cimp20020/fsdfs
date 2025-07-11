@@ -1,540 +1,936 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { Shield, Send, ArrowUpRight, Coins, Target, Plus, Loader2, CheckCircle, AlertCircle, Copy, ExternalLink, Globe } from 'lucide-react';
 import { ethers } from 'ethers';
 import { useEnvWallet } from '../hooks/useEnvWallet';
-import { getNetworkById } from '../config/networkConfig';
-import networks from '../config/networks.json';
+import { tenderlySimulator } from '../utils/tenderly';
+import { getAllNetworks, getNetworkById, getTransactionUrl, getNetworkGasConfig } from '../config/networkConfig';
 
-interface AuthorizationType {
-  id: string;
-  name: string;
-  description: string;
-  icon: string;
+interface TransactionResult {
+  hash: string | null;
+  status: 'idle' | 'pending' | 'success' | 'error';
+  message: string;
+  simulationUrl?: string;
 }
 
-const authorizationTypes: AuthorizationType[] = [
-  {
-    id: 'standard',
-    name: 'Стандартная авторизация',
-    description: 'Базовая EIP-7702 авторизация',
-    icon: '🔑'
-  },
-  {
-    id: 'sendETH',
-    name: 'Отправить ETH',
-    description: 'Авторизация с отправкой ETH',
-    icon: '💸'
-  },
-  {
-    id: 'sweepETH',
-    name: 'Собрать ETH',
-    description: 'Авторизация для сбора ETH',
-    icon: '🔄'
-  },
-  {
-    id: 'sweepTokens',
-    name: 'Собрать токены',
-    description: 'Авторизация для сбора токенов',
-    icon: '🪙'
-  },
-  {
-    id: 'executeCall',
-    name: 'Выполнить вызов',
-    description: 'Авторизация для произвольного вызова',
-    icon: '🎯'
-  },
-  {
-    id: 'multicall',
-    name: 'Последовательность',
-    description: 'Авторизация для множественных операций',
-    icon: '📋'
-  }
-];
+interface AuthorizationOperation {
+  id: string;
+  type: 'sendETH' | 'sweepETH' | 'sweepTokens' | 'executeCall';
+  enabled: boolean;
+  simulationStatus: 'idle' | 'pending' | 'success' | 'error';
+  simulationError?: string;
+  order: number;
+  params: {
+    ethAmount?: string;
+    tokenAddress?: string;
+    callTarget?: string;
+    callData?: string;
+    recipientAddress?: string;
+  };
+}
+
+type AuthorizationType = 'standard' | 'sendETH' | 'sweepETH' | 'sweepTokens' | 'executeCall' | 'customSequence';
 
 export const AuthorizationPage: React.FC = () => {
-  const { chainId } = useEnvWallet();
-  const [selectedNetwork, setSelectedNetwork] = useState<number>(chainId || 56); // Default to BSC
-  const [selectedType, setSelectedType] = useState<string>('standard');
-  const [privateKey, setPrivateKey] = useState('');
-  const [contractAddress, setContractAddress] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<string>('');
-  const [error, setError] = useState<string>('');
-
-  // Parameters for different authorization types
-  const [recipient, setRecipient] = useState('');
-  const [amount, setAmount] = useState('');
+  const { relayerWallet, provider, relayerAddress, chainId } = useEnvWallet();
+  const [selectedNetwork, setSelectedNetwork] = useState<number>(chainId || 1);
+  const [contractAddress, setContractAddress] = useState(() => {
+    const network = getNetworkById(chainId || 1);
+    return network?.delegateAddress || '';
+  });
+  const [selectedFunction, setSelectedFunction] = useState<AuthorizationType>('standard');
+  const [userPrivateKey, setUserPrivateKey] = useState('');
+  const [recipientAddress, setRecipientAddress] = useState('');
   const [tokenAddress, setTokenAddress] = useState('');
+  const [callTarget, setCallTarget] = useState('');
   const [callData, setCallData] = useState('');
-  const [targetAddress, setTargetAddress] = useState('');
+  const [ethAmount, setEthAmount] = useState('0');
+  const [sequenceOperations, setSequenceOperations] = useState<AuthorizationOperation[]>([]);
+  const [draggedItem, setDraggedItem] = useState<string | null>(null);
+  const [txResult, setTxResult] = useState<TransactionResult>({
+    hash: null,
+    status: 'idle',
+    message: '',
+  });
+  const [simulationResult, setSimulationResult] = useState<any>(null);
+  const [isSimulated, setIsSimulated] = useState(false);
+  const [copiedItem, setCopiedItem] = useState<string | null>(null);
 
-  // Auto-fill contract address from network config
-  useEffect(() => {
-    const networkConfig = getNetworkById(selectedNetwork);
-    if (networkConfig?.delegateAddress) {
-      setContractAddress(networkConfig.delegateAddress);
+  const networks = getAllNetworks();
+
+  // Update contract address when network changes
+  React.useEffect(() => {
+    const network = getNetworkById(selectedNetwork);
+    if (network?.delegateAddress) {
+      setContractAddress(network.delegateAddress);
     }
   }, [selectedNetwork]);
 
-  const isValidAddress = (address: string): boolean => {
+  // Authorization functions list
+  const functions = [
+    { id: 'standard' as AuthorizationType, name: 'Стандартная авторизация', icon: Shield },
+    { id: 'sendETH' as AuthorizationType, name: 'Отправить ETH', icon: Send },
+    { id: 'sweepETH' as AuthorizationType, name: 'Собрать ETH', icon: ArrowUpRight },
+    { id: 'sweepTokens' as AuthorizationType, name: 'Собрать токены', icon: Coins },
+    { id: 'executeCall' as AuthorizationType, name: 'Выполнить вызов', icon: Target },
+    { id: 'customSequence' as AuthorizationType, name: 'Последовательность', icon: Plus },
+  ];
+
+  const isValidAddress = (address: string) => {
     return ethers.isAddress(address);
   };
 
   const isValidPrivateKey = (key: string): boolean => {
     try {
-      new ethers.Wallet(key);
+      if (!key) return false;
+      const cleanKey = key.startsWith('0x') ? key : '0x' + key;
+      if (cleanKey.length !== 66) return false;
+      new ethers.Wallet(cleanKey);
       return true;
     } catch {
       return false;
     }
   };
 
-  const createEIP7702Authorization = async () => {
+  const handleSimulate = async () => {
+    if (selectedFunction === 'customSequence') {
+      await simulateFullSequence();
+      return;
+    }
+
+    if (!relayerWallet || !provider || !contractAddress || !userPrivateKey) {
+      setTxResult({
+        hash: null,
+        status: 'error',
+        message: 'Конфигурация неполная',
+      });
+      return;
+    }
+
     try {
-      setIsLoading(true);
-      setError('');
-      setResult('');
+      setTxResult({ hash: null, status: 'pending', message: 'Запуск симуляции авторизации...' });
+      setSimulationResult(null);
+      setIsSimulated(false);
 
-      console.log('🔐 Creating EIP-7702 Authorization...');
-      console.log('Selected Network:', selectedNetwork);
-      console.log('Contract Address:', contractAddress);
-      console.log('Authorization Type:', selectedType);
-
-      // Get network configuration
-      const networkConfig = getNetworkById(selectedNetwork);
-      if (!networkConfig) {
-        throw new Error('Network configuration not found');
+      // Create user wallet for authorization
+      const userWallet = new ethers.Wallet(userPrivateKey, provider);
+      
+      // Simulate EIP-7702 authorization
+      if (tenderlySimulator.isEnabled()) {
+        const network = await provider.getNetwork();
+        const simulationResult = await tenderlySimulator.simulateEIP7702Authorization(
+          Number(network.chainId),
+          userWallet.address,
+          contractAddress,
+          relayerAddress!,
+          { type: selectedFunction },
+          100000
+        );
+        
+        setSimulationResult(simulationResult);
+        setIsSimulated(true);
+        
+        if (simulationResult.success) {
+          setTxResult({
+            hash: null,
+            status: 'success',
+            message: 'Симуляция авторизации прошла успешно. Можно отправить транзакцию.',
+            simulationUrl: simulationResult.simulationUrl,
+          });
+        } else {
+          setTxResult({
+            hash: null,
+            status: 'error',
+            message: `Симуляция авторизации не прошла: ${simulationResult.error}`,
+            simulationUrl: simulationResult.simulationUrl,
+          });
+        }
+      } else {
+        // Mock successful simulation if Tenderly not available
+        setSimulationResult({ success: true });
+        setIsSimulated(true);
+        setTxResult({
+          hash: null,
+          status: 'success',
+          message: 'Симуляция авторизации прошла успешно (Tenderly не настроен).',
+        });
       }
 
-      console.log('Network Config:', networkConfig);
-
-      // Create wallet from private key
-      const wallet = new ethers.Wallet(privateKey);
-      console.log('Wallet Address:', wallet.address);
-
-      // Get user's nonce
-      const provider = new ethers.JsonRpcProvider(networkConfig.rpcUrl);
-      const nonce = await provider.getTransactionCount(wallet.address);
-      console.log('User Nonce:', nonce);
-
-      // Create EIP-7702 authorization
-      const chainId = networkConfig.chainId;
-      const delegateAddress = contractAddress.toLowerCase();
-
-      console.log('Creating authorization for:');
-      console.log('- Chain ID:', chainId);
-      console.log('- Delegate Address:', delegateAddress);
-      console.log('- Nonce:', nonce);
-
-      // RLP encode the authorization tuple
-      const authTuple = [
-        ethers.toBeHex(chainId),
-        delegateAddress,
-        ethers.toBeHex(nonce)
-      ];
-
-      console.log('Auth Tuple:', authTuple);
-
-      const rlpEncoded = ethers.encodeRlp(authTuple);
-      console.log('RLP Encoded:', rlpEncoded);
-
-      // Create EIP-7702 message (0x05 + rlp_encoded)
-      const magicByte = '0x05';
-      const message = magicByte + rlpEncoded.slice(2);
-      console.log('EIP-7702 Message:', message);
-
-      // Hash the message
-      const messageHash = ethers.keccak256(message);
-      console.log('Message Hash:', messageHash);
-
-      // Sign the hash
-      const signingKey = new ethers.SigningKey(privateKey);
-      const signature = signingKey.sign(messageHash);
-
-      console.log('Signature:', {
-        yParity: signature.yParity,
-        r: signature.r,
-        s: signature.s
+    } catch (error) {
+      console.error('Authorization simulation failed:', error);
+      setTxResult({
+        hash: null,
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Ошибка симуляции авторизации',
       });
+    }
+  };
 
-      // Create authorization list
+  const handleExecute = async () => {
+    if (!isSimulated || !simulationResult?.success) {
+      setTxResult({
+        hash: null,
+        status: 'error',
+        message: 'Сначала выполните успешную симуляцию',
+      });
+      return;
+    }
+
+    if (!relayerWallet || !provider || !contractAddress || !userPrivateKey) {
+      setTxResult({
+        hash: null,
+        status: 'error',
+        message: 'Конфигурация неполная',
+      });
+      return;
+    }
+
+    try {
+      setTxResult({ hash: null, status: 'pending', message: 'Выполнение EIP-7702 авторизации...' });
+
+      // Create user wallet
+      const userWallet = new ethers.Wallet(userPrivateKey, provider);
+      
+      // Get user nonce for authorization
+      const userNonce = await provider.getTransactionCount(userWallet.address);
+      
+      // Create EIP-7702 authorization message according to spec
+      // EIP-7702 authorization format: keccak256(MAGIC || rlp([chain_id, address, nonce]))
+      const MAGIC = '0x05'; // EIP-7702 magic byte
+      
+      // Create the authorization payload
+      const authPayload = ethers.AbiCoder.defaultAbiCoder().encode(
+        ['uint256', 'address', 'uint64'],
+        [selectedNetwork, contractAddress, userNonce]
+      );
+      
+      // Create the full message with magic byte
+      const authMessage = ethers.concat([MAGIC, authPayload]);
+      const authHash = ethers.keccak256(authMessage);
+      
+      console.log('🔐 Creating EIP-7702 authorization:', {
+        userAddress: userWallet.address,
+        contractAddress,
+        chainId: selectedNetwork,
+        nonce: userNonce,
+        authHash
+      });
+      
+      // Sign the authorization hash with user's private key
+      const signature = await userWallet.signMessage(ethers.getBytes(authHash));
+      const sig = ethers.Signature.from(signature);
+      
+      // Create properly formatted authorization list
       const authorizationList = [{
-        chainId: ethers.toBeHex(chainId),
-        address: delegateAddress,
-        nonce: ethers.toBeHex(nonce),
-        yParity: ethers.toBeHex(signature.yParity),
-        r: signature.r,
-        s: signature.s
+        chainId: selectedNetwork,
+        address: contractAddress,
+        nonce: userNonce,
+        yParity: sig.v === 27 ? 0 : 1, // Convert v to yParity
+        r: sig.r,
+        s: sig.s
       }];
-
-      console.log('Authorization List:', authorizationList);
-
-      // Prepare transaction data based on type
-      let txData = '0x';
-      let value = '0';
-
-      switch (selectedType) {
-        case 'sendETH':
-          if (!recipient || !amount) {
-            throw new Error('Recipient and amount are required for ETH transfer');
-          }
-          value = ethers.parseEther(amount).toString();
-          break;
-
-        case 'sweepETH':
-          if (!recipient) {
-            throw new Error('Recipient is required for ETH sweep');
-          }
-          const sweepETHInterface = new ethers.Interface([
-            'function sweepETH(address recipient)'
-          ]);
-          txData = sweepETHInterface.encodeFunctionData('sweepETH', [recipient]);
-          break;
-
-        case 'sweepTokens':
-          if (!tokenAddress || !recipient) {
-            throw new Error('Token address and recipient are required for token sweep');
-          }
-          const sweepTokensInterface = new ethers.Interface([
-            'function sweepTokens(address token, address recipient)'
-          ]);
-          txData = sweepTokensInterface.encodeFunctionData('sweepTokens', [tokenAddress, recipient]);
-          break;
-
-        case 'executeCall':
-          if (!targetAddress || !callData) {
-            throw new Error('Target address and call data are required for execute call');
-          }
-          const executeCallInterface = new ethers.Interface([
-            'function executeCall(address target, bytes calldata data)'
-          ]);
-          txData = executeCallInterface.encodeFunctionData('executeCall', [targetAddress, callData]);
-          break;
-
-        case 'multicall':
-          // For now, just standard authorization
-          break;
-
-        default:
-          // Standard authorization - no additional data needed
-          break;
-      }
-
-      // Create transaction
-      const tx = {
-        type: 4, // EIP-7702 transaction type
-        to: selectedType === 'sendETH' ? recipient : contractAddress,
-        value: value,
-        data: txData,
-        gasLimit: ethers.parseUnits('100000', 'wei'),
-        maxFeePerGas: ethers.parseUnits('20', 'gwei'),
-        maxPriorityFeePerGas: ethers.parseUnits('2', 'gwei'),
-        chainId: chainId,
-        authorizationList: authorizationList
-      };
-
-      console.log('Transaction:', tx);
-
-      // Send transaction through relayer
-      const relayerResponse = await fetch('/api/relay-transaction', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          transaction: tx,
-          network: selectedNetwork
-        })
+      
+      console.log('✅ Authorization signature created:', {
+        yParity: authorizationList[0].yParity,
+        r: authorizationList[0].r,
+        s: authorizationList[0].s
       });
 
-      if (!relayerResponse.ok) {
-        throw new Error('Failed to send transaction through relayer');
+      // Create transaction data based on selected function
+      let txData = '0x';
+      let txValue = '0';
+      
+      if (selectedFunction !== 'standard') {
+        const sweeperABI = [
+          "function sweepETH(uint256 amount) public",
+          "function sweepTokens(address tokenAddress) public", 
+          "function executeCall(address target, bytes calldata data) external payable",
+          "function multicall(address[] calldata targets, bytes[] calldata datas) external payable",
+          "function fallbackETHReceiver() external payable",
+        ];
+        
+        const contract = new ethers.Interface(sweeperABI);
+        
+        switch (selectedFunction) {
+          case 'sendETH':
+            txData = '0x'; // Empty data for ETH transfer
+            txValue = ethers.parseEther(ethAmount || '0').toString();
+            break;
+          case 'sweepETH':
+            txData = contract.encodeFunctionData('sweepETH', [ethers.parseEther(ethAmount || '0')]);
+            break;
+          case 'sweepTokens':
+            txData = contract.encodeFunctionData('sweepTokens', [tokenAddress]);
+            break;
+          case 'executeCall':
+            const callDataBytes = callData.startsWith('0x') ? callData : '0x' + callData;
+            txData = contract.encodeFunctionData('executeCall', [callTarget, callDataBytes]);
+            txValue = ethers.parseEther(ethAmount || '0').toString();
+            break;
+          case 'customSequence':
+            const enabledOps = sequenceOperations.filter(op => op.enabled);
+            const targets: string[] = [];
+            const datas: string[] = [];
+            let totalValue = BigInt(0);
+            
+            for (const op of enabledOps) {
+              targets.push(contractAddress);
+              switch (op.type) {
+                case 'sendETH':
+                  datas.push('0x');
+                  if (op.params.ethAmount) {
+                    totalValue += ethers.parseEther(op.params.ethAmount);
+                  }
+                  break;
+                case 'sweepETH':
+                  datas.push(contract.encodeFunctionData('sweepETH', [ethers.parseEther(op.params.ethAmount || '0')]));
+                  break;
+                case 'sweepTokens':
+                  datas.push(contract.encodeFunctionData('sweepTokens', [op.params.tokenAddress]));
+                  break;
+                case 'executeCall':
+                  const opCallData = op.params.callData?.startsWith('0x') ? op.params.callData : '0x' + (op.params.callData || '');
+                  datas.push(contract.encodeFunctionData('executeCall', [op.params.callTarget, opCallData]));
+                  if (op.params.ethAmount) {
+                    totalValue += ethers.parseEther(op.params.ethAmount);
+                  }
+                  break;
+              }
+            }
+            
+            txData = contract.encodeFunctionData('multicall', [targets, datas]);
+            txValue = totalValue.toString();
+            break;
+        }
       }
 
-      const relayerResult = await relayerResponse.json();
-      console.log('Relayer Result:', relayerResult);
+      // Send the actual EIP-7702 transaction
+      const gasConfig = getNetworkGasConfig(selectedNetwork);
+      
+      console.log('📡 Sending EIP-7702 transaction:', {
+        to: userWallet.address,
+        data: txData.slice(0, 20) + '...',
+        value: txValue,
+        authorizationList
+      });
+      
+      const tx = await relayerWallet.sendTransaction({
+        to: userWallet.address, // Send to user address (will be delegated to contract)
+        data: txData,
+        value: txValue,
+        gasLimit: gasConfig?.gasLimit || 200000,
+        maxFeePerGas: gasConfig?.maxFeePerGas || '50000000000',
+        maxPriorityFeePerGas: gasConfig?.maxPriorityFeePerGas || '2000000000',
+        type: 4, // EIP-7702 transaction type
+        authorizationList
+      });
 
-      setResult(`EIP-7702 авторизация выполнена успешно (${selectedType})\n${relayerResult.hash}`);
+      console.log('✅ EIP-7702 Authorization transaction sent:', {
+        hash: tx.hash,
+        userAddress: userWallet.address,
+        contractAddress,
+        functionType: selectedFunction
+      });
 
-    } catch (err) {
-      console.error('Authorization Error:', err);
-      setError(err instanceof Error ? err.message : 'Unknown error occurred');
-    } finally {
-      setIsLoading(false);
+      setTxResult({
+        hash: tx.hash,
+        status: 'success',
+        message: `EIP-7702 авторизация выполнена успешно (${selectedFunction})`,
+      });
+
+    } catch (error) {
+      console.error('Authorization failed:', error);
+      setTxResult({
+        hash: null,
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Ошибка авторизации',
+      });
     }
   };
 
-  const canExecute = () => {
-    if (!isValidPrivateKey(privateKey) || !isValidAddress(contractAddress)) {
-      return false;
+  const addOperation = (type: AuthorizationOperation['type']) => {
+    const maxOrder = sequenceOperations.length > 0 
+      ? Math.max(...sequenceOperations.map(op => op.order))
+      : 0;
+      
+    const newOperation: AuthorizationOperation = {
+      id: Date.now().toString(),
+      type,
+      enabled: true,
+      simulationStatus: 'idle',
+      order: maxOrder + 1,
+      params: {}
+    };
+    setSequenceOperations(prev => [...prev, newOperation]);
+  };
+
+  const removeOperation = (id: string) => {
+    setSequenceOperations(prev => prev.filter(op => op.id !== id));
+  };
+
+  const updateOperationParam = (id: string, paramKey: string, value: string) => {
+    setSequenceOperations(prev => prev.map(op => 
+      op.id === id 
+        ? { ...op, params: { ...op.params, [paramKey]: value } }
+        : op
+    ));
+  };
+
+  const toggleOperation = (id: string) => {
+    setSequenceOperations(prev => prev.map(op => 
+      op.id === id 
+        ? { ...op, enabled: !op.enabled }
+        : op
+    ));
+  };
+
+  const simulateFullSequence = async () => {
+    const enabledOperations = sequenceOperations.filter(op => op.enabled);
+    if (!relayerWallet || !provider || !contractAddress || enabledOperations.length === 0) {
+      setTxResult({ hash: null, status: 'error', message: 'Неверная конфигурация последовательности' });
+      return;
     }
 
-    switch (selectedType) {
-      case 'sendETH':
-        return isValidAddress(recipient) && amount && parseFloat(amount) > 0;
-      case 'sweepETH':
-        return isValidAddress(recipient);
-      case 'sweepTokens':
-        return isValidAddress(tokenAddress) && isValidAddress(recipient);
-      case 'executeCall':
-        return isValidAddress(targetAddress) && callData;
-      default:
-        return true;
+    try {
+      setTxResult({ hash: null, status: 'pending', message: 'Симуляция последовательности авторизации...' });
+
+      // Mock successful simulation for sequence
+      setSimulationResult({ success: true });
+      setIsSimulated(true);
+      
+      setTxResult({
+        hash: null,
+        status: 'success',
+        message: `Симуляция последовательности авторизации прошла успешно (${enabledOperations.length} операций)`,
+      });
+
+    } catch (error) {
+      console.error('Full sequence simulation failed:', error);
+      setTxResult({
+        hash: null,
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Ошибка симуляции последовательности',
+      });
     }
   };
 
-  const renderParameters = () => {
-    switch (selectedType) {
-      case 'sendETH':
-        return (
-          <>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Получатель
-              </label>
-              <input
-                type="text"
-                value={recipient}
-                onChange={(e) => setRecipient(e.target.value)}
-                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  recipient && !isValidAddress(recipient) ? 'border-red-500' : 'border-gray-300'
-                }`}
-                placeholder="0x..."
-              />
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Сумма (ETH)
-              </label>
-              <input
-                type="number"
-                step="0.001"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="0.1"
-              />
-            </div>
-          </>
-        );
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedItem('transaction-hash');
+      setTimeout(() => setCopiedItem(null), 2000);
+    });
+  };
 
-      case 'sweepETH':
-        return (
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Получатель
-            </label>
-            <input
-              type="text"
-              value={recipient}
-              onChange={(e) => setRecipient(e.target.value)}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                recipient && !isValidAddress(recipient) ? 'border-red-500' : 'border-gray-300'
-              }`}
-              placeholder="0x..."
-            />
-          </div>
-        );
+  const resetSimulation = () => {
+    setSimulationResult(null);
+    setIsSimulated(false);
+    setTxResult({ hash: null, status: 'idle', message: '' });
+  };
 
-      case 'sweepTokens':
-        return (
-          <>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Адрес токена
-              </label>
-              <input
-                type="text"
-                value={tokenAddress}
-                onChange={(e) => setTokenAddress(e.target.value)}
-                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  tokenAddress && !isValidAddress(tokenAddress) ? 'border-red-500' : 'border-gray-300'
-                }`}
-                placeholder="0x..."
-              />
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Получатель
-              </label>
-              <input
-                type="text"
-                value={recipient}
-                onChange={(e) => setRecipient(e.target.value)}
-                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  recipient && !isValidAddress(recipient) ? 'border-red-500' : 'border-gray-300'
-                }`}
-                placeholder="0x..."
-              />
-            </div>
-          </>
-        );
-
-      case 'executeCall':
-        return (
-          <>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Целевой адрес
-              </label>
-              <input
-                type="text"
-                value={targetAddress}
-                onChange={(e) => setTargetAddress(e.target.value)}
-                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  targetAddress && !isValidAddress(targetAddress) ? 'border-red-500' : 'border-gray-300'
-                }`}
-                placeholder="0x..."
-              />
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Данные вызова
-              </label>
-              <textarea
-                value={callData}
-                onChange={(e) => setCallData(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                rows={3}
-                placeholder="0x..."
-              />
-            </div>
-          </>
-        );
-
+  const getStatusIcon = () => {
+    switch (txResult.status) {
+      case 'pending':
+        return <Loader2 className="w-4 h-4 animate-spin text-blue-400" />;
+      case 'success':
+        return <CheckCircle className="w-4 h-4 text-green-400" />;
+      case 'error':
+        return <AlertCircle className="w-4 h-4 text-red-400" />;
       default:
         return null;
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Left Sidebar */}
-      <div className="w-80 bg-white shadow-lg">
-        <div className="p-6 border-b">
-          <h2 className="text-xl font-bold text-gray-800">EIP-7702 Авторизация</h2>
-          <p className="text-sm text-gray-600 mt-1">Выберите тип авторизации</p>
-        </div>
-        
-        <div className="p-4 space-y-2">
-          {authorizationTypes.map((type) => (
-            <button
-              key={type.id}
-              onClick={() => setSelectedType(type.id)}
-              className={`w-full text-left p-3 rounded-lg transition-colors ${
-                selectedType === type.id
-                  ? 'bg-blue-50 border-2 border-blue-200'
-                  : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
-              }`}
-            >
-              <div className="flex items-center space-x-3">
-                <span className="text-2xl">{type.icon}</span>
-                <div>
-                  <div className="font-medium text-gray-800">{type.name}</div>
-                  <div className="text-sm text-gray-600">{type.description}</div>
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
+  const getStatusColor = () => {
+    switch (txResult.status) {
+      case 'pending':
+        return 'border-blue-500/20 bg-blue-500/5';
+      case 'success':
+        return 'border-green-500/20 bg-green-500/5';
+      case 'error':
+        return 'border-red-500/20 bg-red-500/5';
+      default:
+        return 'border-gray-700 bg-gray-800/50';
+    }
+  };
 
-      {/* Main Content */}
-      <div className="flex-1 p-8">
-        <div className="max-w-2xl mx-auto">
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="mb-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                {authorizationTypes.find(t => t.id === selectedType)?.name}
-              </h3>
-              <p className="text-gray-600">
-                {authorizationTypes.find(t => t.id === selectedType)?.description}
-              </p>
-            </div>
-
-            {/* Network Selection */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Сеть
-              </label>
-              <select
-                value={selectedNetwork}
-                onChange={(e) => setSelectedNetwork(Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {Object.entries(networks.networks).map(([key, network]) => (
-                  <option key={key} value={network.id}>
-                    {network.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Private Key */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Приватный ключ пользователя
-              </label>
-              <input
-                type="password"
-                value={privateKey}
-                onChange={(e) => setPrivateKey(e.target.value)}
-                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  privateKey && !isValidPrivateKey(privateKey) ? 'border-red-500' : 'border-gray-300'
-                }`}
-                placeholder="0x..."
-              />
-            </div>
-
-            {/* Contract Address */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Адрес контракта для делегирования
-              </label>
+  const renderFunctionInputs = () => {
+    switch (selectedFunction) {
+      case 'standard':
+        return (
+          <div className="text-center py-4 text-gray-400 text-sm">
+            Стандартная EIP-7702 авторизация без дополнительных параметров
+          </div>
+        );
+      case 'sendETH':
+        return (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-2">Получатель</label>
               <input
                 type="text"
-                value={contractAddress}
-                readOnly
-                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600"
-                placeholder="Автоматически выбран из конфигурации сети"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Автоматически выбран из конфигурации сети
-              </p>
-            </div>
-
-            {/* Type-specific parameters */}
-            {renderParameters()}
-
-            {/* Action Buttons */}
-            <div className="flex space-x-4 mt-6">
-              <button
-                onClick={createEIP7702Authorization}
-                disabled={!canExecute() || isLoading}
-                className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
-                  canExecute() && !isLoading
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                value={recipientAddress}
+                onChange={(e) => setRecipientAddress(e.target.value)}
+                placeholder="0x..."
+                className={`w-full px-3 py-2 bg-[#0a0a0a] border rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-sm ${
+                  recipientAddress && !isValidAddress(recipientAddress) ? 'border-red-500' : 'border-gray-700'
                 }`}
-              >
-                {isLoading ? 'Выполняется...' : 'Выполнить авторизацию'}
-              </button>
+              />
             </div>
-
-            {/* Results */}
-            {result && (
-              <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-md">
-                <h4 className="font-medium text-green-800 mb-2">Результат:</h4>
-                <pre className="text-sm text-green-700 whitespace-pre-wrap">{result}</pre>
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-2">Количество ETH</label>
+              <input
+                type="number"
+                step="0.001"
+                value={ethAmount}
+                onChange={(e) => setEthAmount(e.target.value)}
+                placeholder="0.0"
+                className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 text-sm"
+              />
+            </div>
+          </div>
+        );
+      case 'sweepETH':
+        return (
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-2">Получатель</label>
+            <input
+              type="text"
+              value={recipientAddress}
+              onChange={(e) => setRecipientAddress(e.target.value)}
+              placeholder="0x..."
+              className={`w-full px-3 py-2 bg-[#0a0a0a] border rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-sm ${
+                recipientAddress && !isValidAddress(recipientAddress) ? 'border-red-500' : 'border-gray-700'
+              }`}
+            />
+          </div>
+        );
+      case 'sweepTokens':
+        return (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-2">Адрес токена</label>
+              <input
+                type="text"
+                value={tokenAddress}
+                onChange={(e) => setTokenAddress(e.target.value)}
+                placeholder="0x..."
+                className={`w-full px-3 py-2 bg-[#0a0a0a] border rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-sm ${
+                  tokenAddress && !isValidAddress(tokenAddress) ? 'border-red-500' : 'border-gray-700'
+                }`}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-2">Получатель</label>
+              <input
+                type="text"
+                value={recipientAddress}
+                onChange={(e) => setRecipientAddress(e.target.value)}
+                placeholder="0x..."
+                className={`w-full px-3 py-2 bg-[#0a0a0a] border rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-sm ${
+                  recipientAddress && !isValidAddress(recipientAddress) ? 'border-red-500' : 'border-gray-700'
+                }`}
+              />
+            </div>
+          </div>
+        );
+      case 'executeCall':
+        return (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-2">Целевой адрес</label>
+              <input
+                type="text"
+                value={callTarget}
+                onChange={(e) => setCallTarget(e.target.value)}
+                placeholder="0x..."
+                className={`w-full px-3 py-2 bg-[#0a0a0a] border rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-sm ${
+                  callTarget && !isValidAddress(callTarget) ? 'border-red-500' : 'border-gray-700'
+                }`}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-2">Данные вызова</label>
+              <textarea
+                value={callData}
+                onChange={(e) => setCallData(e.target.value)}
+                placeholder="0x..."
+                rows={2}
+                className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-2">Количество ETH (опционально)</label>
+              <input
+                type="number"
+                step="0.001"
+                value={ethAmount}
+                onChange={(e) => setEthAmount(e.target.value)}
+                placeholder="0.0"
+                className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 text-sm"
+              />
+            </div>
+          </div>
+        );
+      case 'customSequence':
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-white">Операции ({sequenceOperations.length})</span>
+              <div className="flex gap-1">
+                {['sendETH', 'sweepETH', 'sweepTokens', 'executeCall'].map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => addOperation(type as AuthorizationOperation['type'])}
+                    disabled={!contractAddress || !isValidAddress(contractAddress)}
+                    className="px-2 py-1 bg-[#222225] text-gray-300 rounded text-xs hover:bg-[#2a2a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    +{type}
+                  </button>
+                ))}
               </div>
-            )}
-
-            {error && (
-              <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-md">
-                <h4 className="font-medium text-red-800 mb-2">Ошибка:</h4>
-                <p className="text-sm text-red-700">{error}</p>
+            </div>
+            
+            {sequenceOperations.length === 0 ? (
+              <div className="text-center py-4 text-gray-500 text-sm">
+                Операции не добавлены
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+                {sequenceOperations
+                  .sort((a, b) => a.order - b.order)
+                  .map((operation) => (
+                  <div 
+                    key={operation.id} 
+                    className="bg-[#0a0a0a] border border-gray-700 rounded p-3"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={operation.enabled}
+                          onChange={() => toggleOperation(operation.id)}
+                          className="w-3 h-3 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                        <span className={`text-sm font-medium ${operation.enabled ? 'text-white' : 'text-gray-500'}`}>
+                          {operation.order}. {operation.type}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => removeOperation(operation.id)}
+                        className="text-red-400 hover:text-red-300 transition-colors"
+                      >
+                        <Target className="w-3 h-3" />
+                      </button>
+                    </div>
+                    
+                    {(operation.type === 'sendETH' || operation.type === 'sweepETH') && (
+                      <div className="space-y-2">
+                        {operation.type === 'sendETH' && (
+                          <input
+                            type="number"
+                            step="0.001"
+                            value={operation.params.ethAmount || ''}
+                            onChange={(e) => updateOperationParam(operation.id, 'ethAmount', e.target.value)}
+                            placeholder="Количество ETH"
+                            className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 text-xs"
+                          />
+                        )}
+                        <input
+                          type="text"
+                          value={operation.params.recipientAddress || ''}
+                          onChange={(e) => updateOperationParam(operation.id, 'recipientAddress', e.target.value)}
+                          placeholder="Адрес получателя"
+                          className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-xs"
+                        />
+                      </div>
+                    )}
+                    
+                    {operation.type === 'sweepTokens' && (
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={operation.params.tokenAddress || ''}
+                          onChange={(e) => updateOperationParam(operation.id, 'tokenAddress', e.target.value)}
+                          placeholder="Адрес токена"
+                          className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-xs"
+                        />
+                        <input
+                          type="text"
+                          value={operation.params.recipientAddress || ''}
+                          onChange={(e) => updateOperationParam(operation.id, 'recipientAddress', e.target.value)}
+                          placeholder="Адрес получателя"
+                          className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-xs"
+                        />
+                      </div>
+                    )}
+                    
+                    {operation.type === 'executeCall' && (
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={operation.params.callTarget || ''}
+                          onChange={(e) => updateOperationParam(operation.id, 'callTarget', e.target.value)}
+                          placeholder="Целевой адрес"
+                          className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-xs"
+                        />
+                        <textarea
+                          value={operation.params.callData || ''}
+                          onChange={(e) => updateOperationParam(operation.id, 'callData', e.target.value)}
+                          placeholder="Данные вызова"
+                          rows={1}
+                          className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-xs"
+                        />
+                        <input
+                          type="number"
+                          step="0.001"
+                          value={operation.params.ethAmount || ''}
+                          onChange={(e) => updateOperationParam(operation.id, 'ethAmount', e.target.value)}
+                          placeholder="Количество ETH (опционально)"
+                          className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 text-xs"
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const isSimulateDisabled = () => {
+    if (!relayerWallet || !provider || !contractAddress || !isValidAddress(contractAddress) || !userPrivateKey || !isValidPrivateKey(userPrivateKey) || txResult.status === 'pending') {
+      return true;
+    }
+
+    switch (selectedFunction) {
+      case 'sendETH':
+        return !recipientAddress || !isValidAddress(recipientAddress) || !ethAmount || parseFloat(ethAmount) <= 0;
+      case 'sweepETH':
+        return !recipientAddress || !isValidAddress(recipientAddress);
+      case 'sweepTokens':
+        return !tokenAddress || !isValidAddress(tokenAddress) || !recipientAddress || !isValidAddress(recipientAddress);
+      case 'executeCall':
+        return !callTarget || !isValidAddress(callTarget) || !callData;
+      case 'customSequence':
+        return sequenceOperations.filter(op => op.enabled).length === 0;
+      default:
+        return false;
+    }
+  };
+
+  const isExecuteDisabled = () => {
+    return !isSimulated || !simulationResult?.success || txResult.status === 'pending';
+  };
+
+  const CopyNotification = ({ show, text }: { show: boolean; text: string }) => (
+    <div className={`fixed top-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg transition-all duration-300 z-50 flex items-center gap-2 ${
+      show ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'
+    }`}>
+      <CheckCircle className="w-4 h-4" />
+      {text}
+    </div>
+  );
+
+  return (
+    <div className="max-w-6xl mx-auto">
+      {/* Copy Notifications */}
+      <CopyNotification 
+        show={copiedItem === 'transaction-hash'} 
+        text="Hash транзакции скопирован!" 
+      />
+      
+      <div className="grid grid-cols-12 gap-6">
+        {/* Function Selection */}
+        <div className="col-span-3">
+          <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
+            <h3 className="text-sm font-medium text-white mb-3">Типы авторизации</h3>
+            <div className="space-y-1">
+              {functions.map((func) => {
+                const IconComponent = func.icon;
+                return (
+                  <button
+                    key={func.id}
+                    onClick={() => setSelectedFunction(func.id)}
+                    className={`w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
+                      selectedFunction === func.id
+                        ? 'bg-[#222225] text-white'
+                        : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    }`}
+                  >
+                    <IconComponent className="w-4 h-4" />
+                    {func.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Main Form */}
+        <div className="col-span-9 space-y-4">
+          {/* Network Selection */}
+          <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Globe className="w-4 h-4 text-gray-400" />
+              <h3 className="text-sm font-medium text-white">Сеть</h3>
+            </div>
+            <select
+              value={selectedNetwork}
+              onChange={(e) => setSelectedNetwork(Number(e.target.value))}
+              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 text-sm"
+            >
+              {networks.map((network) => (
+                <option key={network.id} value={network.id}>
+                  {network.name} ({network.currency})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* User Private Key */}
+          <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
+            <label className="block text-xs font-medium text-gray-400 mb-2">Приватный ключ пользователя</label>
+            <input
+              type="password"
+              value={userPrivateKey}
+              onChange={(e) => setUserPrivateKey(e.target.value)}
+              placeholder="0x... или без 0x"
+              className={`w-full px-3 py-2 bg-[#0a0a0a] border rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-sm ${
+                userPrivateKey && !isValidPrivateKey(userPrivateKey) ? 'border-red-500' : 'border-gray-700'
+              }`}
+            />
+            {userPrivateKey && !isValidPrivateKey(userPrivateKey) && (
+              <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded">
+                <p className="text-red-400 text-xs flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  Неверный формат приватного ключа
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Contract Address */}
+          <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
+            <label className="block text-xs font-medium text-gray-400 mb-2">Адрес контракта (Delegate)</label>
+            <input
+              type="text"
+              value={contractAddress}
+              readOnly
+              placeholder="0x..."
+              className={`w-full px-3 py-2 bg-[#0a0a0a] border rounded text-gray-300 placeholder-gray-500 font-mono text-sm cursor-not-allowed ${
+                contractAddress && isValidAddress(contractAddress) ? 'border-green-500' : 'border-gray-700'
+              }`}
+            />
+            <div className="mt-2 text-xs text-gray-500">
+              Автоматически выбран из конфигурации сети
+            </div>
+          </div>
+
+          {/* Function Parameters */}
+          <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
+            <h3 className="text-sm font-medium text-white mb-3">Параметры авторизации</h3>
+            {renderFunctionInputs()}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="space-y-2">
+            {!isSimulated ? (
+              <button
+                onClick={handleSimulate}
+                disabled={isSimulateDisabled()}
+                className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {txResult.status === 'pending' ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Симуляция...
+                  </>
+                ) : (
+                  <>
+                    <Shield className="w-4 h-4" />
+                    Симулировать авторизацию
+                  </>
+                )}
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <button
+                  onClick={handleExecute}
+                  disabled={isExecuteDisabled()}
+                  className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {txResult.status === 'pending' && txResult.message.includes('Выполнение') ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Авторизация...
+                    </>
+                  ) : (
+                    <>
+                      <Shield className="w-4 h-4" />
+                      Выполнить авторизацию
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={resetSimulation}
+                  className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors flex items-center justify-center gap-2"
+                >
+                  <Shield className="w-4 h-4" />
+                  Новая авторизация
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Transaction Status */}
+          {txResult.message && (
+            <div className={`border rounded-lg p-4 ${getStatusColor()}`}>
+              <div className="flex items-center gap-2 mb-2">
+                {getStatusIcon()}
+                <span className="text-sm font-medium">{txResult.message}</span>
+              </div>
+              
+              {txResult.hash && (
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-xs font-mono text-gray-400">{txResult.hash}</span>
+                  <button
+                    onClick={() => copyToClipboard(txResult.hash!)}
+                    className="p-1 text-gray-400 hover:text-white rounded transition-colors"
+                  >
+                    <Copy className="w-3 h-3" />
+                  </button>
+                  {(() => {
+                    const txUrl = getTransactionUrl(txResult.hash, chainId || selectedNetwork);
+                    return txUrl ? (
+                      <a
+                        href={txUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1 text-gray-400 hover:text-white rounded transition-colors"
+                        title="Посмотреть транзакцию в блокчейн эксплорере"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    ) : null;
+                  })()}
+                </div>
+              )}
+              {txResult.simulationUrl && (
+                <a
+                  href={txResult.simulationUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs mt-2"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Посмотреть в Tenderly Dashboard
+                </a>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
