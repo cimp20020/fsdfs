@@ -110,11 +110,9 @@ export const RelayerPage: React.FC = () => {
                 <tr className="border-b border-gray-700">
                   <th className="text-left py-2 px-3 text-gray-400 font-medium">Сеть</th>
                   <th className="text-left py-2 px-3 text-gray-400 font-medium">Chain ID</th>
-                  <th className="text-left py-2 px-3 text-gray-400 font-medium">Валюта</th>
                   <th className="text-left py-2 px-3 text-gray-400 font-medium">Баланс</th>
                   <th className="text-left py-2 px-3 text-gray-400 font-medium">Gas Limit</th>
                   <th className="text-left py-2 px-3 text-gray-400 font-medium">Delegate Address</th>
-                  <th className="text-center py-2 px-3 text-gray-400 font-medium">Статус</th>
                 </tr>
               </thead>
               <tbody>
@@ -128,7 +126,6 @@ export const RelayerPage: React.FC = () => {
                         <div className="font-medium text-white">{network.name}</div>
                       </td>
                       <td className="py-3 px-3 text-gray-300">{network.id}</td>
-                      <td className="py-3 px-3 text-gray-300">{network.currency}</td>
                       <td className="py-3 px-3">
                         {networkBalance ? (
                           <div className="text-white font-medium">
@@ -143,11 +140,6 @@ export const RelayerPage: React.FC = () => {
                         <div className="font-mono text-xs text-gray-300 break-all">
                           {network.delegateAddress}
                         </div>
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        <div className={`w-2 h-2 rounded-full mx-auto ${
-                          network.id === chainId ? 'bg-blue-400' : 'bg-gray-600'
-                        }`} title={network.id === chainId ? 'Активная сеть' : 'Неактивная сеть'} />
                       </td>
                     </tr>
                   );
