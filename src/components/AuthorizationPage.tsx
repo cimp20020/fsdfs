@@ -51,7 +51,8 @@ const authorizationTypes: AuthorizationType[] = [
 ];
 
 export const AuthorizationPage: React.FC = () => {
-  const { selectedNetwork, setSelectedNetwork } = useEnvWallet();
+  const { chainId } = useEnvWallet();
+  const [selectedNetwork, setSelectedNetwork] = useState<number>(chainId || 56); // Default to BSC
   const [selectedType, setSelectedType] = useState<string>('standard');
   const [privateKey, setPrivateKey] = useState('');
   const [contractAddress, setContractAddress] = useState('');
