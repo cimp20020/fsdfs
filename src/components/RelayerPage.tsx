@@ -59,15 +59,6 @@ export const RelayerPage: React.FC = () => {
         text="Адрес релейера скопирован!" 
       />
       
-      {/* Page Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <Server className="w-6 h-6 text-blue-400" />
-        <div>
-          <h1 className="text-2xl font-bold text-white">Мониторинг Релейера</h1>
-          <p className="text-gray-400">Информация о релейере и балансах во всех сетях</p>
-        </div>
-      </div>
-
       {/* Relayer Address */}
       {relayerAddress && (
         <div className="bg-[#111111] border border-gray-800 rounded-lg p-6">
