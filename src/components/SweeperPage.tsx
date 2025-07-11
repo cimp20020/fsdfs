@@ -704,7 +704,7 @@ export const SweeperPage: React.FC = () => {
             ) : (
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {sequenceOperations.map((operation, index) => (
-                  <div key={operation.id} className={`bg-gray-800/50 border rounded p-3 ${getOperationStatusColor(operation.simulationStatus)}`}>
+                  <div key={operation.id} className={`bg-[#0a0a0a] border rounded p-3 ${getOperationStatusColor(operation.simulationStatus)}`}>
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <input
