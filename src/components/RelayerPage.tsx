@@ -157,15 +157,15 @@ export const RelayerPage: React.FC = () => {
                   <div className="flex items-center justify-between mb-1">
                     <div className="text-sm font-medium text-gray-400">{networkName}</div>
                     {isCurrentNetwork && (
-                  <div className="text-lg font-semibold text-white">
-                    {parseFloat(data.balance).toFixed(4)}
-                  </div>
-                  <div className="text-xs text-gray-400">{data.currency}</div>
-                  {network && (
-                    <div className="text-xs text-gray-500 mt-1">
-                      Chain ID: {network.id}
+                    <div className="text-lg font-semibold text-white">
+                      {parseFloat(data.balance).toFixed(4)}
                     </div>
-                  )}
+                    <div className="text-xs text-gray-400">{data.currency}</div>
+                    {network && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        Chain ID: {network.id}
+                      </div>
+                    )}
                 </div>
               );
             })}
