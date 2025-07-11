@@ -182,8 +182,16 @@ export class TenderlySimulator {
       );
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Tenderly API error: ${response.status} - ${errorText}`);
+        try {
+          const errorData = await response.json();
+          if (errorData.error && errorData.error.message) {
+            throw new Error(errorData.error.message);
+          }
+          throw new Error(`Tenderly API error: ${response.status}`);
+        } catch (parseError) {
+          const errorText = await response.text();
+          throw new Error(`Tenderly API error: ${response.status} - ${errorText}`);
+        }
       }
 
       const result: TenderlySimulationResponse = await response.json();
