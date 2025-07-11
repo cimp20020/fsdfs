@@ -12,6 +12,11 @@ interface TenderlySimulationRequest {
   save?: boolean;
   save_if_fails?: boolean;
   simulation_type?: 'quick' | 'full';
+  state_objects?: {
+    [address: string]: {
+      balance?: string;
+    };
+  };
 }
 
 interface TenderlySimulationResponse {
@@ -166,7 +171,12 @@ export class TenderlySimulator {
         value,
         save: true,
         save_if_fails: true,
-        simulation_type: 'full'
+        simulation_type: 'full',
+        state_objects: {
+          [from]: {
+            balance: '0xde0b6b3a7640000' // 1000 ETH in wei
+          }
+        }
       };
 
       const response = await fetch(
