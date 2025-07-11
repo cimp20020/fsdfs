@@ -193,18 +193,22 @@ export const AuthorizationPage: React.FC = () => {
       // Get user nonce for authorization
       const userNonce = await provider.getTransactionCount(userWallet.address);
       
-      // Create EIP-7702 authorization message according to spec
-      // EIP-7702 authorization format: keccak256(MAGIC || rlp([chain_id, address, nonce]))
-      const MAGIC = '0x05'; // EIP-7702 magic byte
+      // Create EIP-7702 authorization according to exact specification
+      // Format: keccak256(0x05 || rlp([chain_id, address, nonce]))
       
-      // Create the authorization payload
-      const authPayload = ethers.AbiCoder.defaultAbiCoder().encode(
-        ['uint256', 'address', 'uint64'],
-        [selectedNetwork, contractAddress, userNonce]
-      );
+      // RLP encode the authorization tuple [chain_id, address, nonce]
+      const authTuple = [
+        ethers.toBeHex(selectedNetwork),
+        contractAddress.toLowerCase(),
+        ethers.toBeHex(userNonce)
+      ];
       
-      // Create the full message with magic byte
-      const authMessage = ethers.concat([MAGIC, authPayload]);
+      // Manual RLP encoding for the tuple
+      const rlpEncoded = ethers.encodeRlp(authTuple);
+      
+      // Create the message with magic byte 0x05
+      const MAGIC_BYTE = '0x05';
+      const authMessage = ethers.concat([MAGIC_BYTE, rlpEncoded]);
       const authHash = ethers.keccak256(authMessage);
       
       console.log('🔐 Creating EIP-7702 authorization:', {
@@ -212,19 +216,22 @@ export const AuthorizationPage: React.FC = () => {
         contractAddress,
         chainId: selectedNetwork,
         nonce: userNonce,
+        authTuple,
+        rlpEncoded,
+        authMessage: ethers.hexlify(authMessage),
         authHash
       });
       
-      // Sign the authorization hash with user's private key
-      const signature = await userWallet.signMessage(ethers.getBytes(authHash));
+      // Sign the authorization hash with user's private key (raw hash, not message)
+      const signature = await userWallet.signingKey.sign(authHash);
       const sig = ethers.Signature.from(signature);
       
       // Create properly formatted authorization list
       const authorizationList = [{
-        chainId: selectedNetwork,
+        chainId: ethers.toBeHex(selectedNetwork),
         address: contractAddress,
-        nonce: userNonce,
-        yParity: sig.v === 27 ? 0 : 1, // Convert v to yParity
+        nonce: ethers.toBeHex(userNonce),
+        yParity: sig.yParity,
         r: sig.r,
         s: sig.s
       }];
