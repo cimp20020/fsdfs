@@ -43,6 +43,7 @@ export const SweeperPage: React.FC = () => {
   });
   const [simulationResult, setSimulationResult] = useState<any>(null);
   const [isSimulated, setIsSimulated] = useState(false);
+  const [copiedItem, setCopiedItem] = useState<string | null>(null);
 
   const networks = getAllNetworks();
 
@@ -333,7 +334,10 @@ export const SweeperPage: React.FC = () => {
   };
 
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedItem('transaction-hash');
+      setTimeout(() => setCopiedItem(null), 2000);
+    });
   };
 
   const resetSimulation = () => {
@@ -551,8 +555,23 @@ export const SweeperPage: React.FC = () => {
     return !isSimulated || !simulationResult?.success || txResult.status === 'pending';
   };
 
+  const CopyNotification = ({ show, text }: { show: boolean; text: string }) => (
+    <div className={`fixed top-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg transition-all duration-300 z-50 flex items-center gap-2 ${
+      show ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'
+    }`}>
+      <CheckCircle className="w-4 h-4" />
+      {text}
+    </div>
+  );
+
   return (
     <div className="max-w-6xl mx-auto">
+      {/* Copy Notifications */}
+      <CopyNotification 
+        show={copiedItem === 'transaction-hash'} 
+        text="Hash транзакции скопирован!" 
+      />
+      
       <div className="grid grid-cols-12 gap-6">
         {/* Function Selection */}
         <div className="col-span-3">

@@ -52,6 +52,7 @@ export const AuthorizationPage: React.FC = () => {
     status: 'idle',
     message: '',
   });
+  const [copiedItem, setCopiedItem] = useState<string | null>(null);
 
   const networks = getAllNetworks();
 
@@ -226,7 +227,10 @@ export const AuthorizationPage: React.FC = () => {
   };
 
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedItem('transaction-hash');
+      setTimeout(() => setCopiedItem(null), 2000);
+    });
   };
 
   const getStatusIcon = () => {
@@ -270,8 +274,23 @@ export const AuthorizationPage: React.FC = () => {
     }
   };
 
+  const CopyNotification = ({ show, text }: { show: boolean; text: string }) => (
+    <div className={`fixed top-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg transition-all duration-300 z-50 flex items-center gap-2 ${
+      show ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'
+    }`}>
+      <CheckCircle className="w-4 h-4" />
+      {text}
+    </div>
+  );
+
   return (
     <div className="max-w-4xl mx-auto">
+      {/* Copy Notifications */}
+      <CopyNotification 
+        show={copiedItem === 'transaction-hash'} 
+        text="Hash транзакции скопирован!" 
+      />
+      
       <div className="space-y-4">
           {/* Network Selection */}
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
