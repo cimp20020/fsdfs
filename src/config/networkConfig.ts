@@ -9,6 +9,7 @@ export interface NetworkConfig {
     gasLimit: number;
     maxFeePerGas: string;
     maxPriorityFeePerGas: string;
+    authorizationGasLimit?: number;
   };
   relayerKeyEnv: string;
 }
@@ -49,6 +50,11 @@ export function getNetworkDelegateAddress(chainId: number): string | undefined {
 export function getNetworkGasConfig(chainId: number) {
   const network = getNetworkById(chainId);
   return network?.gasConfig;
+}
+
+export function getNetworkAuthorizationGasLimit(chainId: number): number {
+  const network = getNetworkById(chainId);
+  return network?.gasConfig.authorizationGasLimit || 300000; // Default 300k gas for authorization
 }
 
 export function getNetworkRelayerKey(chainId: number): string | undefined {

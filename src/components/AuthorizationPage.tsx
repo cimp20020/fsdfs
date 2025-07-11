@@ -3,7 +3,7 @@ import { Shield, Send, ArrowUpRight, Coins, Target, Plus, Loader2, CheckCircle, 
 import { ethers } from 'ethers';
 import { useEnvWallet } from '../hooks/useEnvWallet';
 import { tenderlySimulator } from '../utils/tenderly';
-import { getAllNetworks, getNetworkById, getTransactionUrl, getNetworkGasConfig } from '../config/networkConfig';
+import { getAllNetworks, getNetworkById, getTransactionUrl, getNetworkGasConfig, getNetworkAuthorizationGasLimit } from '../config/networkConfig';
 
 interface TransactionResult {
   hash: string | null;
@@ -329,7 +329,7 @@ export const AuthorizationPage: React.FC = () => {
         nonce: relayerNonce,
         maxPriorityFeePerGas: feeData.maxPriorityFeePerGas!,
         maxFeePerGas: feeData.maxFeePerGas!,
-        gasLimit: 200000,
+        gasLimit: getNetworkAuthorizationGasLimit(chainId || selectedNetwork),
         to: contractAddress, // Send to delegate contract address
         data: txData,
         value: txValue,
