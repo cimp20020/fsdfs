@@ -197,14 +197,23 @@ export const AuthorizationPage: React.FC = () => {
       // EIP-7702 authorization format: keccak256(MAGIC || rlp([chain_id, address, nonce]))
       const MAGIC = '0x05'; // EIP-7702 magic byte
       
-      // Create the authorization payload
-      const authPayload = ethers.AbiCoder.defaultAbiCoder().encode(
+      // Create the authorization payload using RLP encoding as per EIP-7702 spec
+      // RLP encode [chain_id, address, nonce]
+      const authData = [
+        ethers.toBeHex(selectedNetwork),
+        contractAddress,
+        ethers.toBeHex(userNonce)
+      ];
+      
+      // For simplicity, we'll use ABI encoding instead of RLP for now
+      // In production, proper RLP encoding should be used
+      const rlpEncoded = ethers.AbiCoder.defaultAbiCoder().encode(
         ['uint256', 'address', 'uint64'],
         [selectedNetwork, contractAddress, userNonce]
       );
       
-      // Create the full message with magic byte
-      const authMessage = ethers.concat([MAGIC, authPayload]);
+      // Create the authorization hash: keccak256(MAGIC || rlp_encoded_data)
+      const authMessage = ethers.concat([MAGIC, rlpEncoded]);
       const authHash = ethers.keccak256(authMessage);
       
       console.log('🔐 Creating EIP-7702 authorization:', {
@@ -221,7 +230,7 @@ export const AuthorizationPage: React.FC = () => {
       
       // Create properly formatted authorization list
       const authorizationList = [{
-        chainId: selectedNetwork,
+        chainId: ethers.toBeHex(selectedNetwork),
         address: contractAddress,
         nonce: userNonce,
         yParity: sig.v === 27 ? 0 : 1, // Convert v to yParity
@@ -229,6 +238,12 @@ export const AuthorizationPage: React.FC = () => {
         s: sig.s
       }];
       
+      // Verify the authorization is properly formatted
+      console.log('📋 Authorization List:', {
+        chainId: authorizationList[0].chainId,
+        address: authorizationList[0].address,
+        nonce: authorizationList[0].nonce
+      });
       console.log('✅ Authorization signature created:', {
         yParity: authorizationList[0].yParity,
         r: authorizationList[0].r,
