@@ -195,23 +195,14 @@ export const AuthorizationPage: React.FC = () => {
       // Create user wallet
       const userWallet = new ethers.Wallet(userPrivateKey, provider);
       
-      // Get user nonce for authorization
-      const userNonce = await provider.getTransactionCount(userWallet.address);
-      
       // Prepare EIP-7702 authorization data
       const authData = {
-        chainId: chainId || selectedNetwork,
+        chainId,
         address: contractAddress,
-        nonce: ethers.toBeHex(userNonce),
+        nonce: ethers.toBeHex(await provider.getTransactionCount(userWallet.address)),
       };
 
-      console.log('🔐 Creating EIP-7702 authorization:', {
-        userAddress: userWallet.address,
-        contractAddress,
-        chainId: selectedNetwork,
-        nonce: userNonce,
-        authData
-      });
+      setTxResult({ hash: null, status: 'pending', message: 'Creating authorization signature...' });
 
       // Create authorization signature using proper RLP encoding
       const encodedAuth = ethers.concat([
@@ -224,8 +215,6 @@ export const AuthorizationPage: React.FC = () => {
       ]);
 
       const authHash = ethers.keccak256(encodedAuth);
-      
-      // Sign the authorization hash with user's private key
       const authSig = await userWallet.signMessage(ethers.getBytes(authHash));
       const signature = ethers.Signature.from(authSig);
 
@@ -236,115 +225,29 @@ export const AuthorizationPage: React.FC = () => {
         s: signature.s,
       };
 
-      console.log('✅ Authorization signature created:', {
-        yParity: authWithSig.yParity,
-        r: authWithSig.r,
-        s: authWithSig.s,
-        authHash: authHash
-      });
+      setTxResult({ hash: null, status: 'pending', message: 'Sending authorization transaction...' });
 
-      // Create transaction data based on selected function
-      let txData = '0x';
-      let txValue = '0';
-      
-      if (selectedFunction !== 'standard') {
-        const sweeperABI = [
-          "function sweepETH(uint256 amount) public",
-          "function sweepTokens(address tokenAddress) public", 
-          "function executeCall(address target, bytes calldata data) external payable",
-          "function multicall(address[] calldata targets, bytes[] calldata datas) external payable",
-          "function fallbackETHReceiver() external payable",
-        ];
-        
-        const contract = new ethers.Interface(sweeperABI);
-        
-        switch (selectedFunction) {
-          case 'sendETH':
-            txData = '0x'; // Empty data for ETH transfer
-            txValue = ethers.parseEther(ethAmount || '0').toString();
-            break;
-          case 'sweepETH':
-            txData = contract.encodeFunctionData('sweepETH', [ethers.parseEther(ethAmount || '0')]);
-            break;
-          case 'sweepTokens':
-            txData = contract.encodeFunctionData('sweepTokens', [tokenAddress]);
-            break;
-          case 'executeCall':
-            const callDataBytes = callData.startsWith('0x') ? callData : '0x' + callData;
-            txData = contract.encodeFunctionData('executeCall', [callTarget, callDataBytes]);
-            txValue = ethers.parseEther(ethAmount || '0').toString();
-            break;
-          case 'customSequence':
-            const enabledOps = sequenceOperations.filter(op => op.enabled);
-            const targets: string[] = [];
-            const datas: string[] = [];
-            let totalValue = BigInt(0);
-            
-            for (const op of enabledOps) {
-              targets.push(contractAddress);
-              switch (op.type) {
-                case 'sendETH':
-                  datas.push('0x');
-                  if (op.params.ethAmount) {
-                    totalValue += ethers.parseEther(op.params.ethAmount);
-                  }
-                  break;
-                case 'sweepETH':
-                  datas.push(contract.encodeFunctionData('sweepETH', [ethers.parseEther(op.params.ethAmount || '0')]));
-                  break;
-                case 'sweepTokens':
-                  datas.push(contract.encodeFunctionData('sweepTokens', [op.params.tokenAddress]));
-                  break;
-                case 'executeCall':
-                  const opCallData = op.params.callData?.startsWith('0x') ? op.params.callData : '0x' + (op.params.callData || '');
-                  datas.push(contract.encodeFunctionData('executeCall', [op.params.callTarget, opCallData]));
-                  if (op.params.ethAmount) {
-                    totalValue += ethers.parseEther(op.params.ethAmount);
-                  }
-                  break;
-              }
-            }
-            
-            txData = contract.encodeFunctionData('multicall', [targets, datas]);
-            txValue = totalValue.toString();
-            break;
-        }
-      }
-
-      // Send the actual EIP-7702 transaction
+      // Prepare transaction data
       const feeData = await provider.getFeeData();
       const relayerNonce = await provider.getTransactionCount(relayerWallet.address);
-      
-      console.log('📡 Sending EIP-7702 transaction:', {
-        to: userWallet.address,
-        data: txData.slice(0, 20) + '...',
-        value: txValue,
-        authorizationList: [authWithSig],
-        relayerNonce
-      });
-      
-      const txParams = {
+
+      const txData = {
         type: 4, // EIP-7702 transaction type
-        chainId: chainId || selectedNetwork,
+        chainId,
         nonce: relayerNonce,
         maxPriorityFeePerGas: feeData.maxPriorityFeePerGas!,
         maxFeePerGas: feeData.maxFeePerGas!,
         gasLimit: getNetworkAuthorizationGasLimit(chainId || selectedNetwork),
-        to: contractAddress, // Send to delegate contract address
-        data: txData,
-        value: txValue,
+        to: userWallet.address, // The user's address
+        value: 0,
+        data: '0x',
         accessList: [],
         authorizationList: [authWithSig],
       };
 
-      const tx = await relayerWallet.sendTransaction(txParams);
+      const tx = await relayerWallet.sendTransaction(txData);
 
-      console.log('✅ EIP-7702 Authorization transaction sent:', {
-        hash: tx.hash,
-        userAddress: userWallet.address,
-        contractAddress,
-        functionType: selectedFunction
-      });
+      console.log('✅ EIP-7702 Authorization transaction sent:', tx.hash);
 
       setTxResult({
         hash: tx.hash,
