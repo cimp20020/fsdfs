@@ -52,19 +52,10 @@
 Создайте файл `.env` в корне проекта:
 
 ```env
-# Основной релейер (BSC по умолчанию)
+# Единый релейер для всех сетей
 VITE_RELAYER_PRIVATE_KEY=0x...
 
-# Релейеры для конкретных сетей
-VITE_ETHEREUM_RELAYER_PRIVATE_KEY=0x...
-VITE_BSC_RELAYER_PRIVATE_KEY=0x...
-VITE_POLYGON_RELAYER_PRIVATE_KEY=0x...
-VITE_ARBITRUM_RELAYER_PRIVATE_KEY=0x...
-VITE_OPTIMISM_RELAYER_PRIVATE_KEY=0x...
-VITE_BASE_RELAYER_PRIVATE_KEY=0x...
-VITE_SEPOLIA_RELAYER_PRIVATE_KEY=0x...
-
-# Tenderly (опционально)
+# Tenderly для симуляций (опционально)
 VITE_TENDERLY_ACCOUNT_ID=your_account_id
 VITE_TENDERLY_PROJECT_ID=your_project_id
 VITE_TENDERLY_ACCESS_KEY=your_access_key
@@ -88,16 +79,10 @@ VITE_TENDERLY_ACCESS_KEY=your_access_key
     "maxFeePerGas": "20000000000",
     "maxPriorityFeePerGas": "2000000000"
   },
-  "relayerKeyEnv": "VITE_FANTOM_RELAYER_PRIVATE_KEY"
+  "relayerKeyEnv": "VITE_RELAYER_PRIVATE_KEY"
 }
 ```
 
-3. Добавьте переменную окружения в `.env`:
-```env
-VITE_FANTOM_RELAYER_PRIVATE_KEY=0x...
-```
-
-4. Перезапустите приложение - новая сеть появится автоматически!
 
 ## 🛠️ Установка и запуск
 

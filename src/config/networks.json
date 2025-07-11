@@ -12,7 +12,7 @@
         "maxFeePerGas": "50000000000",
         "maxPriorityFeePerGas": "2000000000"
       },
-      "relayerKeyEnv": "VITE_ETHEREUM_RELAYER_PRIVATE_KEY"
+      "relayerKeyEnv": "VITE_RELAYER_PRIVATE_KEY"
     },
     {
       "id": 56,
@@ -26,7 +26,7 @@
         "maxFeePerGas": "5000000000",
         "maxPriorityFeePerGas": "1000000000"
       },
-      "relayerKeyEnv": "VITE_BSC_RELAYER_PRIVATE_KEY"
+      "relayerKeyEnv": "VITE_RELAYER_PRIVATE_KEY"
     },
     {
       "id": 137,
@@ -40,7 +40,7 @@
         "maxFeePerGas": "50000000000",
         "maxPriorityFeePerGas": "30000000000"
       },
-      "relayerKeyEnv": "VITE_POLYGON_RELAYER_PRIVATE_KEY"
+      "relayerKeyEnv": "VITE_RELAYER_PRIVATE_KEY"
     },
     {
       "id": 42161,
@@ -54,7 +54,7 @@
         "maxFeePerGas": "100000000",
         "maxPriorityFeePerGas": "10000000"
       },
-      "relayerKeyEnv": "VITE_ARBITRUM_RELAYER_PRIVATE_KEY"
+      "relayerKeyEnv": "VITE_RELAYER_PRIVATE_KEY"
     },
     {
       "id": 10,
@@ -68,7 +68,7 @@
         "maxFeePerGas": "100000000",
         "maxPriorityFeePerGas": "10000000"
       },
-      "relayerKeyEnv": "VITE_OPTIMISM_RELAYER_PRIVATE_KEY"
+      "relayerKeyEnv": "VITE_RELAYER_PRIVATE_KEY"
     },
     {
       "id": 8453,
@@ -82,7 +82,7 @@
         "maxFeePerGas": "100000000",
         "maxPriorityFeePerGas": "10000000"
       },
-      "relayerKeyEnv": "VITE_BASE_RELAYER_PRIVATE_KEY"
+      "relayerKeyEnv": "VITE_RELAYER_PRIVATE_KEY"
     }
   ]
 }
