@@ -18,6 +18,7 @@ interface SequenceOperation {
   enabled: boolean;
   simulationStatus: 'idle' | 'pending' | 'success' | 'error';
   simulationError?: string;
+  order: number;
   params: {
     ethAmount?: string;
     tokenAddress?: string;
@@ -39,6 +40,7 @@ export const SweeperPage: React.FC = () => {
   const [callData, setCallData] = useState('');
   const [ethAmount, setEthAmount] = useState('0');
   const [sequenceOperations, setSequenceOperations] = useState<SequenceOperation[]>([]);
+  const [draggedItem, setDraggedItem] = useState<string | null>(null);
   const [txResult, setTxResult] = useState<TransactionResult>({
     hash: null,
     status: 'idle',
@@ -322,11 +324,16 @@ export const SweeperPage: React.FC = () => {
   };
 
   const addOperation = (type: SequenceOperation['type']) => {
+    const maxOrder = sequenceOperations.length > 0 
+      ? Math.max(...sequenceOperations.map(op => op.order))
+      : 0;
+      
     const newOperation: SequenceOperation = {
       id: Date.now().toString(),
       type,
       enabled: true,
       simulationStatus: 'idle',
+      order: maxOrder + 1,
       params: {}
     };
     setSequenceOperations(prev => [...prev, newOperation]);
@@ -334,6 +341,48 @@ export const SweeperPage: React.FC = () => {
 
   const removeOperation = (id: string) => {
     setSequenceOperations(prev => prev.filter(op => op.id !== id));
+  };
+
+  const moveOperation = (draggedId: string, targetId: string) => {
+    setSequenceOperations(prev => {
+      const draggedIndex = prev.findIndex(op => op.id === draggedId);
+      const targetIndex = prev.findIndex(op => op.id === targetId);
+      
+      if (draggedIndex === -1 || targetIndex === -1) return prev;
+      
+      const newOperations = [...prev];
+      const [draggedOperation] = newOperations.splice(draggedIndex, 1);
+      newOperations.splice(targetIndex, 0, draggedOperation);
+      
+      // Update order numbers
+      return newOperations.map((op, index) => ({
+        ...op,
+        order: index + 1
+      }));
+    });
+  };
+
+  const handleDragStart = (e: React.DragEvent, operationId: string) => {
+    setDraggedItem(operationId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', operationId);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (draggedItem && draggedItem !== targetId) {
+      moveOperation(draggedItem, targetId);
+    }
+    setDraggedItem(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedItem(null);
   };
 
   const updateOperationParam = (id: string, paramKey: string, value: string) => {
@@ -702,9 +751,21 @@ export const SweeperPage: React.FC = () => {
                 Операции не добавлены
               </div>
             ) : (
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {sequenceOperations.map((operation, index) => (
-                  <div key={operation.id} className={`bg-[#0a0a0a] border rounded p-3 ${getOperationStatusColor(operation.simulationStatus)}`}>
+              <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+                {sequenceOperations
+                  .sort((a, b) => a.order - b.order)
+                  .map((operation, index) => (
+                  <div 
+                    key={operation.id} 
+                    className={`bg-[#0a0a0a] border rounded p-3 cursor-move transition-all duration-200 ${getOperationStatusColor(operation.simulationStatus)} ${
+                      draggedItem === operation.id ? 'dragging' : ''
+                    }`}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, operation.id)}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, operation.id)}
+                    onDragEnd={handleDragEnd}
+                  >
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <input
@@ -714,7 +775,7 @@ export const SweeperPage: React.FC = () => {
                           className="w-3 h-3 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
                         />
                         <span className={`text-sm font-medium ${operation.enabled ? 'text-white' : 'text-gray-500'}`}>
-                          {index + 1}. {operation.type}
+                          {operation.order}. {operation.type}
                         </span>
                         {getOperationStatusIcon(operation.simulationStatus)}
                       </div>
