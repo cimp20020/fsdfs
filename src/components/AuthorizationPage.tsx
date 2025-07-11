@@ -164,18 +164,38 @@ export const AuthorizationPage: React.FC = () => {
       const authorization = {
         chainId: selectedNetwork,
         address: delegateAddress,
-        nonce: await provider.getTransactionCount(userWallet.address),
+        nonce: await provider.getTransactionCount(userWallet.address)
       };
 
-      // Подписываем авторизацию пользовательским ключом
+      // EIP-7702 Authorization RLP encoding
+      // Format: [chain_id, address, nonce]
+      const authorizationRlp = ethers.encodeRlp([
+        ethers.toBeHex(authorization.chainId),
+        authorization.address.toLowerCase(),
+        ethers.toBeHex(authorization.nonce)
+      ]);
+      
+      // Создаем хеш для подписи согласно EIP-7702
+      // keccak256(0x05 || rlp([chain_id, address, nonce]))
       const authHash = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(
-          ['uint256', 'address', 'uint256'],
-          [authorization.chainId, authorization.address, authorization.nonce]
-        )
+        ethers.concat(['0x05', authorizationRlp])
       );
       
+      // Подписываем хеш пользовательским ключом
       const authSignature = await userWallet.signMessage(ethers.getBytes(authHash));
+      
+      // Парсим подпись для получения v, r, s
+      const signature = ethers.Signature.from(authSignature);
+      
+      console.log('✅ EIP-7702 Authorization created:', {
+        authorization,
+        authHash,
+        signature: {
+          v: signature.v,
+          r: signature.r,
+          s: signature.s
+        }
+      });
 
       // Релейер отправляет транзакцию с авторизацией
       const tx = await relayerWallet.sendTransaction({
