@@ -1,20 +1,6 @@
 {
   "networks": [
     {
-      "id": 11155111,
-      "name": "Sepolia",
-      "currency": "ETH",
-      "rpcUrl": "https://sepolia.infura.io/v3/YOUR_INFURA_KEY",
-      "explorerUrl": "https://sepolia.etherscan.io",
-      "delegateAddress": "0x4351D1bEC873130a0217be62646C9CE73C814720",
-      "gasConfig": {
-        "gasLimit": 200000,
-        "maxFeePerGas": "20000000000",
-        "maxPriorityFeePerGas": "2000000000"
-      },
-      "relayerKeyEnv": "VITE_RELAYER_PRIVATE_KEY"
-    },
-    {
       "id": 56,
       "name": "BSC",
       "currency": "BNB",
