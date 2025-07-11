@@ -1,16 +1,23 @@
 import React, { useState } from 'react';
-import { Wallet, RefreshCw, Copy, CheckCircle } from 'lucide-react';
+import { Wallet, RefreshCw, Copy, CheckCircle, Server, Network, Globe, Activity } from 'lucide-react';
 import { useEnvWallet } from '../hooks/useEnvWallet';
+import { getAllNetworks } from '../config/networkConfig';
 
 export const RelayerPage: React.FC = () => {
   const { 
     relayerAddress, 
+    chainId,
+    relayerBalance,
     multiNetworkBalances,
-    fetchMultiNetworkBalances 
+    fetchMultiNetworkBalances,
+    provider
   } = useEnvWallet();
 
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  const networks = getAllNetworks();
+  const currentNetwork = networks.find(network => network.id === chainId);
 
   const truncateAddress = (address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -45,64 +52,183 @@ export const RelayerPage: React.FC = () => {
   );
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="space-y-6">
       {/* Copy Notifications */}
       <CopyNotification 
         show={copiedItem === 'relayer-address'} 
         text="Адрес релейера скопирован!" 
       />
+      
+      {/* Page Header */}
+      <div className="flex items-center gap-3 mb-6">
+        <Server className="w-6 h-6 text-blue-400" />
+        <div>
+          <h1 className="text-2xl font-bold text-white">Мониторинг Релейера</h1>
+          <p className="text-gray-400">Информация о релейере и балансах во всех сетях</p>
+        </div>
+      </div>
 
-      {/* Relayer Information and Multi-Network Balances */}
-      {(relayerAddress || (multiNetworkBalances && Object.keys(multiNetworkBalances).length > 0)) && (
+      {/* Current Network Status */}
+      {currentNetwork && provider && (
         <div className="bg-[#111111] border border-gray-800 rounded-lg p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <Wallet className="w-5 h-5 text-blue-400" />
-              <h2 className="text-lg font-semibold text-white">Информация о релейере</h2>
-            </div>
-            {multiNetworkBalances && Object.keys(multiNetworkBalances).length > 0 && (
-              <button
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-                className="flex items-center gap-2 px-3 py-1.5 bg-[#222225] text-white rounded text-sm hover:bg-[#2a2a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                Обновить
-              </button>
-            )}
+          <div className="flex items-center gap-3 mb-4">
+            <Activity className="w-5 h-5 text-green-400" />
+            <h2 className="text-lg font-semibold text-white">Текущая сеть</h2>
           </div>
-
-          {/* Relayer Address */}
-          {relayerAddress && (
-            <div className="mb-6">
-              <div className="text-sm text-gray-400 mb-2">Адрес релейера</div>
-              <div 
-                onClick={() => copyToClipboard(relayerAddress, 'relayer-address')}
-                className="text-white font-mono text-sm bg-[#0a0a0a] border border-gray-700 p-3 rounded cursor-pointer hover:bg-gray-800/50 transition-colors flex items-center justify-between group"
-              >
-                <span>{relayerAddress}</span>
-                <Copy className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
+              <div className="text-sm text-gray-400 mb-1">Сеть</div>
+              <div className="text-lg font-semibold text-white">{currentNetwork.name}</div>
+              <div className="text-xs text-gray-400">Chain ID: {currentNetwork.id}</div>
+            </div>
+            
+            <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
+              <div className="text-sm text-gray-400 mb-1">Валюта</div>
+              <div className="text-lg font-semibold text-white">{currentNetwork.currency}</div>
+            </div>
+            
+            <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
+              <div className="text-sm text-gray-400 mb-1">Баланс</div>
+              <div className="text-lg font-semibold text-white">
+                {relayerBalance ? parseFloat(relayerBalance).toFixed(4) : '0.0000'}
+              </div>
+              <div className="text-xs text-gray-400">{currentNetwork.currency}</div>
+            </div>
+          </div>
+          
+          <div className="mt-4 pt-4 border-t border-gray-700">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-gray-400">RPC URL:</span>
+                <div className="text-white font-mono text-xs break-all">{currentNetwork.rpcUrl}</div>
+              </div>
+              <div>
+                <span className="text-gray-400">Explorer:</span>
+                <a 
+                  href={currentNetwork.explorerUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:text-blue-300 font-mono text-xs break-all ml-2"
+                >
+                  {currentNetwork.explorerUrl}
+                </a>
               </div>
             </div>
-          )}
+          </div>
+        </div>
+      )}
 
-          {/* Multi-Network Balances */}
-          {multiNetworkBalances && Object.keys(multiNetworkBalances).length > 0 && (
-            <>
-              <div className="text-sm text-gray-400 mb-4">Балансы во всех сетях</div>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {Object.entries(multiNetworkBalances).map(([networkName, data]) => (
-                  <div key={networkName} className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
-                    <div className="text-sm font-medium text-gray-400 mb-1">{networkName}</div>
-                    <div className="text-lg font-semibold text-white">
-                      {parseFloat(data.balance).toFixed(4)}
-                    </div>
-                    <div className="text-xs text-gray-400">{data.currency}</div>
-                  </div>
-                ))}
+      {/* Relayer Address */}
+      {relayerAddress && (
+        <div className="bg-[#111111] border border-gray-800 rounded-lg p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Wallet className="w-5 h-5 text-blue-400" />
+            <h2 className="text-lg font-semibold text-white">Адрес релейера</h2>
+          </div>
+          
+          <div 
+            onClick={() => copyToClipboard(relayerAddress, 'relayer-address')}
+            className="text-white font-mono text-sm bg-[#0a0a0a] border border-gray-700 p-4 rounded cursor-pointer hover:bg-gray-800/50 transition-colors flex items-center justify-between group"
+          >
+            <span>{relayerAddress}</span>
+            <Copy className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
+          </div>
+        </div>
+      )}
+
+      {/* Network Configuration */}
+      <div className="bg-[#111111] border border-gray-800 rounded-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <Network className="w-5 h-5 text-purple-400" />
+            <h2 className="text-lg font-semibold text-white">Конфигурация сетей</h2>
+          </div>
+          <div className="text-sm text-gray-400">
+            Всего сетей: {networks.length}
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {networks.map((network) => (
+            <div key={network.id} className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-medium text-white">{network.name}</div>
+                <div className={`w-2 h-2 rounded-full ${
+                  network.id === chainId ? 'bg-green-400' : 'bg-gray-600'
+                }`} title={network.id === chainId ? 'Активная сеть' : 'Неактивная сеть'} />
               </div>
-            </>
-          )}
+              <div className="space-y-1 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Chain ID:</span>
+                  <span className="text-white">{network.id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Валюта:</span>
+                  <span className="text-white">{network.currency}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Gas Limit:</span>
+                  <span className="text-white">{network.gasConfig.gasLimit.toLocaleString()}</span>
+                </div>
+              </div>
+              <div className="mt-2 pt-2 border-t border-gray-700">
+                <div className="text-xs text-gray-400 mb-1">Delegate Address:</div>
+                <div className="text-xs font-mono text-white break-all">
+                  {network.delegateAddress}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Multi-Network Balances */}
+      {multiNetworkBalances && Object.keys(multiNetworkBalances).length > 0 && (
+        <div className="bg-[#111111] border border-gray-800 rounded-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Globe className="w-5 h-5 text-green-400" />
+              <h2 className="text-lg font-semibold text-white">Балансы во всех сетях</h2>
+            </div>
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="flex items-center gap-2 px-3 py-1.5 bg-[#222225] text-white rounded text-sm hover:bg-[#2a2a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Обновить
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {Object.entries(multiNetworkBalances).map(([networkName, data]) => {
+              const network = networks.find(n => n.name === networkName);
+              const isCurrentNetwork = network?.id === chainId;
+              
+              return (
+                <div key={networkName} className={`bg-[#0a0a0a] border rounded-lg p-4 ${
+                  isCurrentNetwork ? 'border-green-500/30 bg-green-500/5' : 'border-gray-700'
+                }`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="text-sm font-medium text-gray-400">{networkName}</div>
+                    {isCurrentNetwork && (
+                      <div className="w-2 h-2 bg-green-400 rounded-full" title="Активная сеть" />
+                    )}
+                  </div>
+                  <div className="text-lg font-semibold text-white">
+                    {parseFloat(data.balance).toFixed(4)}
+                  </div>
+                  <div className="text-xs text-gray-400">{data.currency}</div>
+                  {network && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      Chain ID: {network.id}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
