@@ -3,6 +3,7 @@ import { Send, ArrowUpRight, Coins, Target, Loader2, CheckCircle, AlertCircle, E
 import { ethers } from 'ethers';
 import { useEnvWallet } from '../hooks/useEnvWallet';
 import { tenderlySimulator } from '../utils/tenderly';
+import { getAllNetworks, getNetworkById, getTransactionUrl, getNetworkGasConfig } from '../config/networkConfig';
 
 interface TransactionResult {
   hash: string | null;
@@ -24,16 +25,6 @@ interface SequenceOperation {
 
 type FunctionType = 'sendETH' | 'sweepETH' | 'sweepTokens' | 'executeCall' | 'customSequence';
 
-const NETWORKS = [
-  { id: 1, name: 'Ethereum', currency: 'ETH' },
-  { id: 56, name: 'BSC', currency: 'BNB' },
-  { id: 137, name: 'Polygon', currency: 'MATIC' },
-  { id: 42161, name: 'Arbitrum', currency: 'ETH' },
-  { id: 10, name: 'Optimism', currency: 'ETH' },
-  { id: 8453, name: 'Base', currency: 'ETH' },
-  { id: 11155111, name: 'Sepolia', currency: 'ETH' },
-];
-
 export const SweeperPage: React.FC = () => {
   const { relayerWallet, provider, relayerAddress, chainId } = useEnvWallet();
   const [contractAddress, setContractAddress] = useState('');
@@ -52,6 +43,8 @@ export const SweeperPage: React.FC = () => {
   });
   const [simulationResult, setSimulationResult] = useState<any>(null);
   const [isSimulated, setIsSimulated] = useState(false);
+
+  const networks = getAllNetworks();
 
   // Sweeper contract ABI
   const sweeperABI = [
@@ -74,11 +67,6 @@ export const SweeperPage: React.FC = () => {
     return ethers.isAddress(address);
   };
 
-  const getTransactionUrl = (hash: string, chainId: number): string | null => {
-    const network = NETWORKS.find(n => n.id === chainId);
-    if (!network) return null;
-    return `${network.explorer}/tx/${hash}`;
-  };
   const handleSimulate = async () => {
     if (!relayerWallet || !provider || !contractAddress) {
       setTxResult({
@@ -198,7 +186,7 @@ export const SweeperPage: React.FC = () => {
       const contract = new ethers.Contract(contractAddress, sweeperABI, relayerWallet);
       const tx = await contract[functionName](...params, {
         value: ethers.parseEther(value),
-        gasLimit: 200000,
+        gasLimit: getNetworkGasConfig(chainId || selectedNetwork)?.gasLimit || 200000,
       });
 
       setTxResult({
@@ -304,7 +292,7 @@ export const SweeperPage: React.FC = () => {
 
       const tx = await contract.multicall(targets, datas, {
         value: totalValue,
-        gasLimit: 300000,
+        gasLimit: (getNetworkGasConfig(chainId || selectedNetwork)?.gasLimit || 200000) + 100000,
       });
 
       setTxResult({
@@ -605,7 +593,7 @@ export const SweeperPage: React.FC = () => {
               onChange={(e) => setSelectedNetwork(Number(e.target.value))}
               className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
             >
-              {NETWORKS.map((network) => (
+              {networks.map((network) => (
                 <option key={network.id} value={network.id}>
                   {network.name} ({network.currency})
                 </option>

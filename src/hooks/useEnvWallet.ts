@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
+import { getAllNetworks, getNetworkById, getNetworkRelayerKey } from '../config/networkConfig';
 
 interface EnvWalletState {
   userWallet: ethers.Wallet | null;
@@ -32,73 +33,24 @@ export const useEnvWallet = () => {
     currentUserPrivateKey: null,
   });
 
-  // Network configurations for multi-balance fetching
-  const NETWORKS = [
-    {
-      id: 56,
-      name: 'BSC',
-      rpcUrl: import.meta.env.VITE_RPC_URL || 'https://bsc-dataseed1.binance.org',
-      currency: 'BNB',
-      relayerKey: import.meta.env.VITE_RELAYER_PRIVATE_KEY
-    },
-    {
-      id: 1,
-      name: 'Ethereum',
-      rpcUrl: import.meta.env.VITE_ETHEREUM_RPC_URL || 'https://eth.llamarpc.com',
-      currency: 'ETH',
-      relayerKey: import.meta.env.VITE_ETHEREUM_RELAYER_PRIVATE_KEY || import.meta.env.VITE_RELAYER_PRIVATE_KEY
-    },
-    {
-      id: 11155111,
-      name: 'Sepolia',
-      rpcUrl: import.meta.env.VITE_SEPOLIA_RPC_URL || 'https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161',
-      currency: 'ETH',
-      relayerKey: import.meta.env.VITE_SEPOLIA_RELAYER_PRIVATE_KEY || import.meta.env.VITE_RELAYER_PRIVATE_KEY
-    },
-    {
-      id: 42161,
-      name: 'Arbitrum',
-      rpcUrl: import.meta.env.VITE_ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc',
-      currency: 'ETH',
-      relayerKey: import.meta.env.VITE_ARBITRUM_RELAYER_PRIVATE_KEY || import.meta.env.VITE_RELAYER_PRIVATE_KEY
-    },
-    {
-      id: 8453,
-      name: 'Base',
-      rpcUrl: import.meta.env.VITE_BASE_RPC_URL || 'https://mainnet.base.org',
-      currency: 'ETH',
-      relayerKey: import.meta.env.VITE_BASE_RELAYER_PRIVATE_KEY || import.meta.env.VITE_RELAYER_PRIVATE_KEY
-    },
-    {
-      id: 137,
-      name: 'Polygon',
-      rpcUrl: import.meta.env.VITE_POLYGON_RPC_URL || 'https://polygon-rpc.com',
-      currency: 'MATIC',
-      relayerKey: import.meta.env.VITE_POLYGON_RELAYER_PRIVATE_KEY || import.meta.env.VITE_RELAYER_PRIVATE_KEY
-    },
-    {
-      id: 10,
-      name: 'Optimism',
-      rpcUrl: import.meta.env.VITE_OPTIMISM_RPC_URL || 'https://mainnet.optimism.io',
-      currency: 'ETH',
-      relayerKey: import.meta.env.VITE_OPTIMISM_RELAYER_PRIVATE_KEY || import.meta.env.VITE_RELAYER_PRIVATE_KEY
-    }
-  ];
 
   // Fetch balances from all networks
   const fetchMultiNetworkBalances = useCallback(async () => {
     console.log('🌐 Fetching multi-network balances...');
     
     const balances: { [networkName: string]: { balance: string; currency: string } } = {};
+    const networks = getAllNetworks();
     
-    const promises = NETWORKS.map(async (network) => {
-      if (!network.relayerKey || network.relayerKey.trim() === '' || network.relayerKey === '0x...' || network.relayerKey === '0x') {
+    const promises = networks.map(async (network) => {
+      const relayerKey = getNetworkRelayerKey(network.id);
+      
+      if (!relayerKey || relayerKey.trim() === '' || relayerKey === '0x...' || relayerKey === '0x') {
         console.log(`⚠️ No relayer key for ${network.name}, skipping`);
         return;
       }
       
       // Validate private key format (should be 64 hex characters, optionally prefixed with 0x)
-      const cleanKey = network.relayerKey.startsWith('0x') ? network.relayerKey.slice(2) : network.relayerKey;
+      const cleanKey = relayerKey.startsWith('0x') ? relayerKey.slice(2) : relayerKey;
       if (!/^[0-9a-fA-F]{64}$/.test(cleanKey)) {
         console.log(`⚠️ Invalid private key format for ${network.name}, skipping`);
         return;
@@ -106,7 +58,7 @@ export const useEnvWallet = () => {
       
       try {
         const provider = new ethers.JsonRpcProvider(network.rpcUrl);
-        const wallet = new ethers.Wallet(network.relayerKey, provider);
+        const wallet = new ethers.Wallet(relayerKey, provider);
         const balance = await provider.getBalance(wallet.address);
         
         balances[network.name] = {
@@ -142,24 +94,19 @@ export const useEnvWallet = () => {
 
   const initializeProvider = async () => {
     try {
-      // Get network-specific configuration
-      const getNetworkConfig = () => {
-        // Default to BSC if no specific network is selected
-        const bscConfig = {
-          relayerPrivateKey: import.meta.env.VITE_RELAYER_PRIVATE_KEY,
-          rpcUrl: import.meta.env.VITE_RPC_URL
-        };
-        
-        // You can extend this to support multiple networks
-        return bscConfig;
-      };
-      
-      const { relayerPrivateKey, rpcUrl } = getNetworkConfig();
+      // Use the first network as default (BSC)
+      const defaultNetwork = getNetworkById(56); // BSC
+      if (!defaultNetwork) {
+        throw new Error('Default network (BSC) not found in configuration');
+      }
+
+      const relayerPrivateKey = getNetworkRelayerKey(defaultNetwork.id) || import.meta.env.VITE_RELAYER_PRIVATE_KEY;
+      const rpcUrl = defaultNetwork.rpcUrl;
 
       if (!relayerPrivateKey || !rpcUrl) {
         setWalletState(prev => ({
           ...prev,
-          error: 'Please configure VITE_RELAYER_PRIVATE_KEY and VITE_RPC_URL in .env file',
+          error: `Please configure ${defaultNetwork.relayerKeyEnv} in .env file`,
         }));
         return;
       }

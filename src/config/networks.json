@@ -1,0 +1,102 @@
+{
+  "networks": [
+    {
+      "id": 1,
+      "name": "Ethereum",
+      "currency": "ETH",
+      "rpcUrl": "https://eth.llamarpc.com",
+      "explorerUrl": "https://etherscan.io",
+      "delegateAddress": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
+      "gasConfig": {
+        "gasLimit": 200000,
+        "maxFeePerGas": "50000000000",
+        "maxPriorityFeePerGas": "2000000000"
+      },
+      "relayerKeyEnv": "VITE_ETHEREUM_RELAYER_PRIVATE_KEY"
+    },
+    {
+      "id": 56,
+      "name": "BSC",
+      "currency": "BNB",
+      "rpcUrl": "https://bsc-dataseed1.binance.org",
+      "explorerUrl": "https://bscscan.com",
+      "delegateAddress": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
+      "gasConfig": {
+        "gasLimit": 200000,
+        "maxFeePerGas": "5000000000",
+        "maxPriorityFeePerGas": "1000000000"
+      },
+      "relayerKeyEnv": "VITE_BSC_RELAYER_PRIVATE_KEY"
+    },
+    {
+      "id": 137,
+      "name": "Polygon",
+      "currency": "MATIC",
+      "rpcUrl": "https://polygon-rpc.com",
+      "explorerUrl": "https://polygonscan.com",
+      "delegateAddress": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
+      "gasConfig": {
+        "gasLimit": 200000,
+        "maxFeePerGas": "50000000000",
+        "maxPriorityFeePerGas": "30000000000"
+      },
+      "relayerKeyEnv": "VITE_POLYGON_RELAYER_PRIVATE_KEY"
+    },
+    {
+      "id": 42161,
+      "name": "Arbitrum",
+      "currency": "ETH",
+      "rpcUrl": "https://arb1.arbitrum.io/rpc",
+      "explorerUrl": "https://arbiscan.io",
+      "delegateAddress": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
+      "gasConfig": {
+        "gasLimit": 200000,
+        "maxFeePerGas": "100000000",
+        "maxPriorityFeePerGas": "10000000"
+      },
+      "relayerKeyEnv": "VITE_ARBITRUM_RELAYER_PRIVATE_KEY"
+    },
+    {
+      "id": 10,
+      "name": "Optimism",
+      "currency": "ETH",
+      "rpcUrl": "https://mainnet.optimism.io",
+      "explorerUrl": "https://optimistic.etherscan.io",
+      "delegateAddress": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
+      "gasConfig": {
+        "gasLimit": 200000,
+        "maxFeePerGas": "100000000",
+        "maxPriorityFeePerGas": "10000000"
+      },
+      "relayerKeyEnv": "VITE_OPTIMISM_RELAYER_PRIVATE_KEY"
+    },
+    {
+      "id": 8453,
+      "name": "Base",
+      "currency": "ETH",
+      "rpcUrl": "https://mainnet.base.org",
+      "explorerUrl": "https://basescan.org",
+      "delegateAddress": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
+      "gasConfig": {
+        "gasLimit": 200000,
+        "maxFeePerGas": "100000000",
+        "maxPriorityFeePerGas": "10000000"
+      },
+      "relayerKeyEnv": "VITE_BASE_RELAYER_PRIVATE_KEY"
+    },
+    {
+      "id": 11155111,
+      "name": "Sepolia",
+      "currency": "ETH",
+      "rpcUrl": "https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161",
+      "explorerUrl": "https://sepolia.etherscan.io",
+      "delegateAddress": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
+      "gasConfig": {
+        "gasLimit": 200000,
+        "maxFeePerGas": "20000000000",
+        "maxPriorityFeePerGas": "2000000000"
+      },
+      "relayerKeyEnv": "VITE_SEPOLIA_RELAYER_PRIVATE_KEY"
+    }
+  ]
+}

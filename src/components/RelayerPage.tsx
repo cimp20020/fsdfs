@@ -1,16 +1,7 @@
 import React from 'react';
 import { Globe, Zap, Wallet, RefreshCw } from 'lucide-react';
 import { useEnvWallet } from '../hooks/useEnvWallet';
-
-const NETWORKS = [
-  { id: 1, name: 'Ethereum', currency: 'ETH' },
-  { id: 56, name: 'BSC', currency: 'BNB' },
-  { id: 137, name: 'Polygon', currency: 'MATIC' },
-  { id: 42161, name: 'Arbitrum', currency: 'ETH' },
-  { id: 10, name: 'Optimism', currency: 'ETH' },
-  { id: 8453, name: 'Base', currency: 'ETH' },
-  { id: 11155111, name: 'Sepolia', currency: 'ETH' },
-];
+import { getAllNetworks, getNetworkById } from '../config/networkConfig';
 
 export const RelayerPage: React.FC = () => {
   const { 
@@ -22,7 +13,8 @@ export const RelayerPage: React.FC = () => {
     fetchMultiNetworkBalances 
   } = useEnvWallet();
 
-  const currentNetwork = NETWORKS.find(n => n.id === chainId);
+  const networks = getAllNetworks();
+  const currentNetwork = getNetworkById(chainId || 0);
 
   const truncateAddress = (address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;

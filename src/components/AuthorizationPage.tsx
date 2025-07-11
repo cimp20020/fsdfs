@@ -3,6 +3,7 @@ import { Send, Loader2, CheckCircle, AlertCircle, ExternalLink, Copy, Key, User,
 import { ethers } from 'ethers';
 import { useEnvWallet } from '../hooks/useEnvWallet';
 import { tenderlySimulator } from '../utils/tenderly';
+import { getAllNetworks, getNetworkById, getNetworkDelegateAddress, getTransactionUrl } from '../config/networkConfig';
 
 interface TransactionStatus {
   hash: string | null;
@@ -21,16 +22,6 @@ interface AuthorizationFunction {
     data?: string;
   };
 }
-
-const NETWORKS = [
-  { id: 1, name: 'Ethereum', currency: 'ETH', explorer: 'https://etherscan.io' },
-  { id: 56, name: 'BSC', currency: 'BNB', explorer: 'https://bscscan.com' },
-  { id: 137, name: 'Polygon', currency: 'MATIC', explorer: 'https://polygonscan.com' },
-  { id: 42161, name: 'Arbitrum', currency: 'ETH', explorer: 'https://arbiscan.io' },
-  { id: 10, name: 'Optimism', currency: 'ETH', explorer: 'https://optimistic.etherscan.io' },
-  { id: 8453, name: 'Base', currency: 'ETH', explorer: 'https://basescan.org' },
-  { id: 11155111, name: 'Sepolia', currency: 'ETH', explorer: 'https://sepolia.etherscan.io' },
-];
 
 export const AuthorizationPage: React.FC = () => {
   const { 
@@ -62,6 +53,8 @@ export const AuthorizationPage: React.FC = () => {
     message: '',
   });
 
+  const networks = getAllNetworks();
+
   const isValidAddress = (address: string) => {
     return ethers.isAddress(address);
   };
@@ -79,6 +72,11 @@ export const AuthorizationPage: React.FC = () => {
     setPrivateKey(key);
     if (key.trim() === '') {
       updateUserPrivateKey('');
+      // Auto-fill delegate address from network config
+      const networkConfig = getNetworkById(selectedNetwork);
+      if (networkConfig && !delegateAddress) {
+        setDelegateAddress(networkConfig.delegateAddress);
+      }
     } else if (isValidPrivateKey(key)) {
       const normalizedKey = key.startsWith('0x') ? key : '0x' + key;
       updateUserPrivateKey(normalizedKey);
@@ -231,11 +229,6 @@ export const AuthorizationPage: React.FC = () => {
     navigator.clipboard.writeText(text);
   };
 
-  const getTransactionUrl = (hash: string, chainId: number): string | null => {
-    const network = NETWORKS.find(n => n.id === chainId);
-    if (!network) return null;
-    return `${network.explorer}/tx/${hash}`;
-  };
   const getStatusIcon = () => {
     switch (txStatus.status) {
       case 'pending':
@@ -262,7 +255,7 @@ export const AuthorizationPage: React.FC = () => {
     }
   };
 
-  const currentNetwork = NETWORKS.find(n => n.id === (chainId || selectedNetwork));
+  const currentNetwork = getNetworkById(chainId || selectedNetwork);
 
   const isAuthorizeDisabled = () => {
     if (!userWallet || !isValidPrivateKey(privateKey) || txStatus.status === 'pending') {
@@ -293,7 +286,7 @@ export const AuthorizationPage: React.FC = () => {
               onChange={(e) => setSelectedNetwork(Number(e.target.value))}
               className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
             >
-              {NETWORKS.map((network) => (
+              {networks.map((network) => (
                 <option key={network.id} value={network.id}>
                   {network.name} ({network.currency})
                 </option>
@@ -360,7 +353,7 @@ export const AuthorizationPage: React.FC = () => {
                     type="text"
                     value={delegateAddress}
                     onChange={(e) => setDelegateAddress(e.target.value)}
-                    placeholder="0x..."
+                    placeholder={getNetworkById(selectedNetwork)?.delegateAddress || "0x..."}
                     className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
                   />
                   {delegateAddress && !isValidAddress(delegateAddress) && (
