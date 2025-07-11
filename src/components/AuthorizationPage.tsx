@@ -5,6 +5,11 @@ import { useEnvWallet } from '../hooks/useEnvWallet';
 import { tenderlySimulator } from '../utils/tenderly';
 import { getAllNetworks, getNetworkById, getTransactionUrl, getNetworkGasConfig, getNetworkAuthorizationGasLimit } from '../config/networkConfig';
 
+// Delegate contract ABI for authorize function
+const DELEGATE_CONTRACT_ABI = [
+  "function authorize(uint256 chainId, address authorizedAddress, uint256 nonce, uint8 yParity, bytes32 r, bytes32 s) external"
+];
+
 interface TransactionResult {
   hash: string | null;
   status: 'idle' | 'pending' | 'success' | 'error';
@@ -119,16 +124,48 @@ export const AuthorizationPage: React.FC = () => {
       // Create user wallet for authorization
       const userWallet = new ethers.Wallet(userPrivateKey, provider);
       
-      // Simulate EIP-7702 authorization
+      // Prepare authorization data
+      const userNonce = await provider.getTransactionCount(userWallet.address);
+      const authData = {
+        chainId,
+        address: userWallet.address,
+        nonce: ethers.toBeHex(userNonce),
+      };
+
+      // Create authorization signature
+      const encodedAuth = ethers.concat([
+        '0x05',
+        ethers.encodeRlp([
+          ethers.toBeHex(authData.chainId),
+          authData.address,
+          authData.nonce,
+        ]),
+      ]);
+
+      const authHash = ethers.keccak256(encodedAuth);
+      const authSig = await userWallet.signMessage(ethers.getBytes(authHash));
+      const signature = ethers.Signature.from(authSig);
+
+      // Encode function call to delegate contract
+      const contractInterface = new ethers.Interface(DELEGATE_CONTRACT_ABI);
+      const encodedFunctionCall = contractInterface.encodeFunctionData('authorize', [
+        authData.chainId,
+        authData.address,
+        authData.nonce,
+        signature.yParity,
+        signature.r,
+        signature.s,
+      ]);
+
+      // Simulate contract call
       if (tenderlySimulator.isEnabled()) {
-        const network = await provider.getNetwork();
-        const simulationResult = await tenderlySimulator.simulateEIP7702Authorization(
-          Number(network.chainId),
-          userWallet.address,
-          contractAddress,
+        const simulationResult = await tenderlySimulator.simulateContractCall(
+          chainId || selectedNetwork,
           relayerAddress!,
-          { type: selectedFunction },
-          100000
+          contractAddress,
+          encodedFunctionCall,
+          '0',
+          getNetworkAuthorizationGasLimit(chainId || selectedNetwork)
         );
         
         setSimulationResult(simulationResult);
@@ -195,18 +232,19 @@ export const AuthorizationPage: React.FC = () => {
       // Create user wallet
       const userWallet = new ethers.Wallet(userPrivateKey, provider);
       
-      // Prepare EIP-7702 authorization data
+      // Prepare authorization data
+      const userNonce = await provider.getTransactionCount(userWallet.address);
       const authData = {
         chainId,
-        address: contractAddress,
-        nonce: ethers.toBeHex(await provider.getTransactionCount(userWallet.address)),
+        address: userWallet.address,
+        nonce: ethers.toBeHex(userNonce),
       };
 
       setTxResult({ hash: null, status: 'pending', message: 'Creating authorization signature...' });
 
-      // Create authorization signature using proper RLP encoding
+      // Create authorization signature
       const encodedAuth = ethers.concat([
-        '0x05', // EIP-7702 magic byte
+        '0x05',
         ethers.encodeRlp([
           ethers.toBeHex(authData.chainId),
           authData.address,
@@ -218,12 +256,16 @@ export const AuthorizationPage: React.FC = () => {
       const authSig = await userWallet.signMessage(ethers.getBytes(authHash));
       const signature = ethers.Signature.from(authSig);
 
-      const authWithSig = {
-        ...authData,
-        yParity: signature.yParity === 0 ? '0x' : '0x01',
-        r: signature.r,
-        s: signature.s,
-      };
+      // Encode function call to delegate contract
+      const contractInterface = new ethers.Interface(DELEGATE_CONTRACT_ABI);
+      const encodedFunctionCall = contractInterface.encodeFunctionData('authorize', [
+        authData.chainId,
+        authData.address,
+        authData.nonce,
+        signature.yParity,
+        signature.r,
+        signature.s,
+      ]);
 
       setTxResult({ hash: null, status: 'pending', message: 'Sending authorization transaction...' });
 
@@ -232,27 +274,26 @@ export const AuthorizationPage: React.FC = () => {
       const relayerNonce = await provider.getTransactionCount(relayerWallet.address);
 
       const txData = {
-        type: 4, // EIP-7702 transaction type
+        type: 2, // EIP-1559 transaction type
         chainId,
         nonce: relayerNonce,
         maxPriorityFeePerGas: feeData.maxPriorityFeePerGas!,
         maxFeePerGas: feeData.maxFeePerGas!,
         gasLimit: getNetworkAuthorizationGasLimit(chainId || selectedNetwork),
-        to: userWallet.address, // The user's address
+        to: contractAddress, // The delegate contract address
         value: 0,
-        data: '0x',
+        data: encodedFunctionCall,
         accessList: [],
-        authorizationList: [authWithSig],
       };
 
       const tx = await relayerWallet.sendTransaction(txData);
 
-      console.log('✅ EIP-7702 Authorization transaction sent:', tx.hash);
+      console.log('✅ Authorization transaction sent:', tx.hash);
 
       setTxResult({
         hash: tx.hash,
         status: 'success',
-        message: `EIP-7702 авторизация выполнена успешно (${selectedFunction})`,
+        message: `Авторизация выполнена успешно (${selectedFunction})`,
       });
 
     } catch (error) {
