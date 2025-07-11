@@ -23,13 +23,13 @@ interface AuthorizationFunction {
 }
 
 const NETWORKS = [
-  { id: 1, name: 'Ethereum', currency: 'ETH' },
-  { id: 56, name: 'BSC', currency: 'BNB' },
-  { id: 137, name: 'Polygon', currency: 'MATIC' },
-  { id: 42161, name: 'Arbitrum', currency: 'ETH' },
-  { id: 10, name: 'Optimism', currency: 'ETH' },
-  { id: 8453, name: 'Base', currency: 'ETH' },
-  { id: 11155111, name: 'Sepolia', currency: 'ETH' },
+  { id: 1, name: 'Ethereum', currency: 'ETH', explorer: 'https://etherscan.io' },
+  { id: 56, name: 'BSC', currency: 'BNB', explorer: 'https://bscscan.com' },
+  { id: 137, name: 'Polygon', currency: 'MATIC', explorer: 'https://polygonscan.com' },
+  { id: 42161, name: 'Arbitrum', currency: 'ETH', explorer: 'https://arbiscan.io' },
+  { id: 10, name: 'Optimism', currency: 'ETH', explorer: 'https://optimistic.etherscan.io' },
+  { id: 8453, name: 'Base', currency: 'ETH', explorer: 'https://basescan.org' },
+  { id: 11155111, name: 'Sepolia', currency: 'ETH', explorer: 'https://sepolia.etherscan.io' },
 ];
 
 export const AuthorizationPage: React.FC = () => {
@@ -231,6 +231,11 @@ export const AuthorizationPage: React.FC = () => {
     navigator.clipboard.writeText(text);
   };
 
+  const getTransactionUrl = (hash: string, chainId: number): string | null => {
+    const network = NETWORKS.find(n => n.id === chainId);
+    if (!network) return null;
+    return `${network.explorer}/tx/${hash}`;
+  };
   const getStatusIcon = () => {
     switch (txStatus.status) {
       case 'pending':
@@ -461,6 +466,20 @@ export const AuthorizationPage: React.FC = () => {
                   >
                     <Copy className="w-3 h-3" />
                   </button>
+                  {(() => {
+                    const txUrl = getTransactionUrl(txStatus.hash, chainId || selectedNetwork);
+                    return txUrl ? (
+                      <a
+                        href={txUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1 text-gray-400 hover:text-white rounded transition-colors"
+                        title="Посмотреть транзакцию в блокчейн эксплорере"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    ) : null;
+                  })()}
                 </div>
               )}
               {txStatus.simulationUrl && (

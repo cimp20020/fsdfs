@@ -74,6 +74,11 @@ export const SweeperPage: React.FC = () => {
     return ethers.isAddress(address);
   };
 
+  const getTransactionUrl = (hash: string, chainId: number): string | null => {
+    const network = NETWORKS.find(n => n.id === chainId);
+    if (!network) return null;
+    return `${network.explorer}/tx/${hash}`;
+  };
   const handleSimulate = async () => {
     if (!relayerWallet || !provider || !contractAddress) {
       setTxResult({
@@ -696,6 +701,20 @@ export const SweeperPage: React.FC = () => {
                   >
                     <Copy className="w-3 h-3" />
                   </button>
+                  {(() => {
+                    const txUrl = getTransactionUrl(txResult.hash, chainId || selectedNetwork);
+                    return txUrl ? (
+                      <a
+                        href={txUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1 text-gray-400 hover:text-white rounded transition-colors"
+                        title="Посмотреть транзакцию в блокчейн эксплорере"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    ) : null;
+                  })()}
                 </div>
               )}
               {txResult.simulationUrl && (
