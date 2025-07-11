@@ -738,6 +738,7 @@ export const SweeperPage: React.FC = () => {
                   <button
                     key={type}
                     onClick={() => addOperation(type as SequenceOperation['type'])}
+                   disabled={!contractAddress || !isValidAddress(contractAddress)}
                     className="px-2 py-1 bg-[#222225] text-gray-300 rounded text-xs hover:bg-[#2a2a2d] transition-colors"
                   >
                     +{type}
