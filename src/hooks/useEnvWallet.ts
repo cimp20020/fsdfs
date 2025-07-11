@@ -33,6 +33,94 @@ export const useEnvWallet = () => {
     currentUserPrivateKey: null,
   });
 
+  // Function to switch relayer network
+  const setRelayerNetwork = useCallback(async (targetChainId: number) => {
+    try {
+      console.log('🔄 Switching relayer network to chainId:', targetChainId);
+      
+      const targetNetwork = getNetworkById(targetChainId);
+      if (!targetNetwork) {
+        throw new Error(`Network with chainId ${targetChainId} not found in configuration`);
+      }
+
+      const relayerPrivateKey = getNetworkRelayerKey(targetNetwork.id);
+      if (!relayerPrivateKey || relayerPrivateKey.trim() === '' || relayerPrivateKey === '0x...' || relayerPrivateKey === '0x') {
+        throw new Error(`No relayer key configured for ${targetNetwork.name}`);
+      }
+
+      // Create new provider and relayer wallet for target network
+      const newProvider = new ethers.JsonRpcProvider(targetNetwork.rpcUrl);
+      const newRelayerWallet = new ethers.Wallet(relayerPrivateKey, newProvider);
+      
+      // Verify network connection
+      const network = await newProvider.getNetwork();
+      const actualChainId = Number(network.chainId);
+      
+      if (actualChainId !== targetChainId) {
+        throw new Error(`Network chainId mismatch: expected ${targetChainId}, got ${actualChainId}`);
+      }
+
+      // Get relayer balance on new network
+      const relayerBalance = await newProvider.getBalance(newRelayerWallet.address);
+
+      console.log('✅ Relayer network switched successfully:', {
+        networkName: targetNetwork.name,
+        chainId: actualChainId,
+        relayerAddress: newRelayerWallet.address,
+        relayerBalance: ethers.formatEther(relayerBalance)
+      });
+
+      // Update state with new network configuration
+      setWalletState(prev => {
+        const newState = {
+          ...prev,
+          relayerWallet: newRelayerWallet,
+          provider: newProvider,
+          chainId: actualChainId,
+          relayerAddress: newRelayerWallet.address,
+          relayerBalance: ethers.formatEther(relayerBalance),
+          error: null,
+        };
+
+        // If user wallet exists, recreate it with new provider
+        if (prev.currentUserPrivateKey) {
+          try {
+            const newUserWallet = new ethers.Wallet(prev.currentUserPrivateKey, newProvider);
+            newState.userWallet = newUserWallet;
+            newState.userAddress = newUserWallet.address;
+            newState.isConfigured = true;
+
+            // Get user balance on new network asynchronously
+            newProvider.getBalance(newUserWallet.address)
+              .then(balance => {
+                setWalletState(current => ({
+                  ...current,
+                  userBalance: ethers.formatEther(balance),
+                }));
+              })
+              .catch(error => {
+                console.error('❌ Failed to get user balance on new network:', error);
+              });
+          } catch (error) {
+            console.error('❌ Failed to recreate user wallet on new network:', error);
+            newState.userWallet = null;
+            newState.userAddress = null;
+            newState.userBalance = null;
+            newState.isConfigured = false;
+          }
+        }
+
+        return newState;
+      });
+
+    } catch (error) {
+      console.error('❌ Failed to switch relayer network:', error);
+      setWalletState(prev => ({
+        ...prev,
+        error: error instanceof Error ? error.message : 'Failed to switch network',
+      }));
+    }
+  }, []);
 
   // Fetch balances from all networks
   const fetchMultiNetworkBalances = useCallback(async () => {
@@ -287,5 +375,6 @@ export const useEnvWallet = () => {
     reinitialize: initializeProvider,
     updateUserPrivateKey,
     fetchMultiNetworkBalances,
+    setRelayerNetwork,
   };
 };

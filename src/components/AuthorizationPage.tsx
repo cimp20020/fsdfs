@@ -31,7 +31,7 @@ interface AuthorizationOperation {
 type AuthorizationType = 'standard' | 'sendETH' | 'sweepETH' | 'sweepTokens' | 'executeCall' | 'customSequence';
 
 export const AuthorizationPage: React.FC = () => {
-  const { relayerWallet, provider, relayerAddress, chainId } = useEnvWallet();
+  const { relayerWallet, provider, relayerAddress, chainId, setRelayerNetwork } = useEnvWallet();
   const [selectedNetwork, setSelectedNetwork] = useState<number>(chainId || 1);
   const [contractAddress, setContractAddress] = useState(() => {
     const network = getNetworkById(chainId || 1);
@@ -63,7 +63,12 @@ export const AuthorizationPage: React.FC = () => {
     if (network?.delegateAddress) {
       setContractAddress(network.delegateAddress);
     }
-  }, [selectedNetwork]);
+    
+    // Switch relayer network to match selected network
+    if (setRelayerNetwork && selectedNetwork !== chainId) {
+      setRelayerNetwork(selectedNetwork);
+    }
+  }, [selectedNetwork, chainId, setRelayerNetwork]);
 
   // Authorization functions list
   const functions = [
@@ -195,7 +200,7 @@ export const AuthorizationPage: React.FC = () => {
       
       // Prepare EIP-7702 authorization data
       const authData = {
-        chainId: selectedNetwork,
+        chainId: chainId || selectedNetwork,
         address: contractAddress,
         nonce: ethers.toBeHex(userNonce),
       };
@@ -320,7 +325,7 @@ export const AuthorizationPage: React.FC = () => {
       
       const txParams = {
         type: 4, // EIP-7702 transaction type
-        chainId: selectedNetwork,
+        chainId: chainId || selectedNetwork,
         nonce: relayerNonce,
         maxPriorityFeePerGas: feeData.maxPriorityFeePerGas!,
         maxFeePerGas: feeData.maxFeePerGas!,
