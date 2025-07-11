@@ -6,7 +6,7 @@
       "currency": "ETH",
       "rpcUrl": "https://eth.llamarpc.com",
       "explorerUrl": "https://etherscan.io",
-      "delegateAddress": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
+      "delegateAddress": "0x4351D1bEC873130a0217be62646C9CE73C814720",
       "gasConfig": {
         "gasLimit": 200000,
         "maxFeePerGas": "50000000000",
