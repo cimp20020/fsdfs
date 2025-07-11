@@ -7,7 +7,7 @@ import { getAllNetworks, getNetworkById, getTransactionUrl, getNetworkGasConfig 
 
 
 export const AuthorizationPage: React.FC = () => {
-  const { wallet, provider } = useWallet();
+  const { userWallet, provider } = useEnvWallet();
   const [delegateAddress, setDelegateAddress] = useState('');
   const [relayerAddress, setRelayerAddress] = useState('');
   const [gasLimit, setGasLimit] = useState('40000');
@@ -22,7 +22,7 @@ export const AuthorizationPage: React.FC = () => {
   };
 
   const handleAuthorize = async () => {
-    if (!provider || !wallet.isConnected) {
+    if (!provider || !userWallet) {
       setTxStatus({
         hash: null,
         status: 'error',
@@ -53,7 +53,7 @@ export const AuthorizationPage: React.FC = () => {
       setTxStatus({ hash: null, status: 'pending', message: 'Preparing authorization...' });
 
       const signer = await provider.getSigner();
-      const userNonce = await provider.getTransactionCount(wallet.address!);
+      const userNonce = await provider.getTransactionCount(userWallet.address);
       const network = await provider.getNetwork();
       const chainId = Number(network.chainId);
 
@@ -100,7 +100,7 @@ export const AuthorizationPage: React.FC = () => {
         maxPriorityFeePerGas: feeData.maxPriorityFeePerGas!,
         maxFeePerGas: feeData.maxFeePerGas!,
         gasLimit: parseInt(gasLimit),
-        to: wallet.address!, // The user's address
+        to: userWallet.address, // The user's address
         value: 0,
         data: '0x',
         accessList: [],
@@ -210,7 +210,7 @@ export const AuthorizationPage: React.FC = () => {
         <button
           onClick={handleAuthorize}
           disabled={
-            !wallet.isConnected ||
+            !userWallet ||
             !delegateAddress ||
             !relayerAddress ||
             !isValidAddress(delegateAddress) ||
