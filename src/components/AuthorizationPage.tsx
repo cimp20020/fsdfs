@@ -100,31 +100,32 @@ export const AuthorizationPage: React.FC = () => {
 
       setTxStatus({ hash: null, status: 'pending', message: 'Создание подписи авторизации...' });
 
-      // Create EIP-7702 authorization
-      const authData = [
-        ethers.toBeHex(chainId),
-        delegateAddress.toLowerCase(),
-        ethers.toBeHex(userNonce),
-      ];
-
-      // RLP encode the authorization data
-      const encodedAuth = ethers.encodeRlp(authData);
-      
-      // Create the hash with EIP-7702 prefix
-      const authHash = ethers.keccak256(ethers.concat(['0x05', encodedAuth]));
-      
-      // Sign the hash
-      const signature = await userWallet.signMessage(ethers.getBytes(authHash));
-      const sig = ethers.Signature.from(signature);
-
-      // Create authorization object
-      const authorization = {
+      // Create EIP-7702 authorization data
+      const authData = {
         chainId: ethers.toBeHex(chainId),
         address: delegateAddress.toLowerCase(),
         nonce: ethers.toBeHex(userNonce),
-        yParity: sig.yParity === 0 ? '0x00' : '0x01',
-        r: sig.r,
-        s: sig.s,
+      };
+
+      // Create authorization signature with proper RLP encoding
+      const encodedAuth = ethers.concat([
+        '0x05',
+        ethers.encodeRlp([
+          ethers.toBeHex(authData.chainId),
+          authData.address,
+          authData.nonce,
+        ]),
+      ]);
+
+      const authHash = ethers.keccak256(encodedAuth);
+      const authSig = await userWallet.signMessage(ethers.getBytes(authHash));
+      const signature = ethers.Signature.from(authSig);
+
+      const authorization = {
+        ...authData,
+        yParity: signature.yParity === 0 ? '0x00' : '0x01',
+        r: signature.r,
+        s: signature.s,
       };
 
       setTxStatus({ hash: null, status: 'pending', message: 'Симуляция транзакции...' });
