@@ -301,7 +301,7 @@ export const AuthorizationPage: React.FC = () => {
             <select
               value={selectedNetwork}
               onChange={(e) => setSelectedNetwork(Number(e.target.value))}
-              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 text-sm"
             >
               {networks.map((network) => (
                 <option key={network.id} value={network.id}>
@@ -322,7 +322,7 @@ export const AuthorizationPage: React.FC = () => {
               value={privateKey}
               onChange={(e) => handlePrivateKeyChange(e.target.value)}
               placeholder="0x... или без префикса 0x"
-              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-sm"
             />
             {privateKey && !isValidPrivateKey(privateKey) && (
               <p className="text-red-400 text-xs mt-1">Неверный формат приватного ключа</p>
@@ -345,7 +345,7 @@ export const AuthorizationPage: React.FC = () => {
             <select
               value={selectedFunction}
               onChange={(e) => setSelectedFunction(e.target.value)}
-              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 text-sm"
             >
               <option value="authorization">Стандартная авторизация</option>
               {customFunctions.map((func) => (
@@ -371,7 +371,7 @@ export const AuthorizationPage: React.FC = () => {
                     value={delegateAddress}
                     onChange={(e) => setDelegateAddress(e.target.value)}
                     placeholder={getNetworkById(selectedNetwork)?.delegateAddress || "0x..."}
-                    className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                    className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-sm"
                   />
                   {delegateAddress && !isValidAddress(delegateAddress) && (
                     <p className="text-red-400 text-xs mt-1">Неверный формат адреса</p>
@@ -387,7 +387,7 @@ export const AuthorizationPage: React.FC = () => {
                     value={gasLimit}
                     onChange={(e) => setGasLimit(e.target.value)}
                     placeholder="40000"
-                    className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 text-sm"
                   />
                 </div>
               </div>
@@ -408,7 +408,7 @@ export const AuthorizationPage: React.FC = () => {
                         value={customFunc.params.target || ''}
                         onChange={(e) => updateCustomFunction(customFunc.id, 'target', e.target.value)}
                         placeholder="0x..."
-                        className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                        className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-sm"
                       />
                     </div>
                     <div>
@@ -421,7 +421,7 @@ export const AuthorizationPage: React.FC = () => {
                         value={customFunc.params.value || '0'}
                         onChange={(e) => updateCustomFunction(customFunc.id, 'value', e.target.value)}
                         placeholder="0"
-                        className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                        className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 text-sm"
                       />
                     </div>
                     <div>
@@ -433,7 +433,7 @@ export const AuthorizationPage: React.FC = () => {
                         onChange={(e) => updateCustomFunction(customFunc.id, 'data', e.target.value)}
                         placeholder="0x..."
                         rows={2}
-                        className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                        className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-sm"
                       />
                     </div>
                   </div>
@@ -443,7 +443,7 @@ export const AuthorizationPage: React.FC = () => {
 
             <button
               onClick={handleAuthorize}
-              className="flex items-center gap-1 px-2 py-1 bg-[#222225] text-white rounded text-xs hover:bg-[#2a2a2d] transition-colors"
+              disabled={isAuthorizeDisabled()}
               className="w-full mt-4 bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {txStatus.status === 'pending' ? (

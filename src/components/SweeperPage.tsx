@@ -385,7 +385,7 @@ export const SweeperPage: React.FC = () => {
               value={ethAmount}
               onChange={(e) => setEthAmount(e.target.value)}
               placeholder="0.0"
-              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 text-sm"
             />
           </div>
         );
@@ -398,7 +398,7 @@ export const SweeperPage: React.FC = () => {
               value={tokenAddress}
               onChange={(e) => setTokenAddress(e.target.value)}
               placeholder="0x..."
-              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-sm"
             />
           </div>
         );
@@ -412,7 +412,7 @@ export const SweeperPage: React.FC = () => {
                 value={callTarget}
                 onChange={(e) => setCallTarget(e.target.value)}
                 placeholder="0x..."
-                className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-sm"
               />
             </div>
             <div>
@@ -422,7 +422,7 @@ export const SweeperPage: React.FC = () => {
                 onChange={(e) => setCallData(e.target.value)}
                 placeholder="0x..."
                 rows={2}
-                className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-sm"
               />
             </div>
             <div>
@@ -433,7 +433,7 @@ export const SweeperPage: React.FC = () => {
                 value={ethAmount}
                 onChange={(e) => setEthAmount(e.target.value)}
                 placeholder="0.0"
-                className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 text-sm"
               />
             </div>
           </div>
@@ -483,7 +483,7 @@ export const SweeperPage: React.FC = () => {
                         value={operation.params.ethAmount || ''}
                         onChange={(e) => updateOperationParam(operation.id, 'ethAmount', e.target.value)}
                         placeholder="Количество ETH"
-                        className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs"
+                        className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 text-xs"
                       />
                     )}
                     
@@ -493,7 +493,7 @@ export const SweeperPage: React.FC = () => {
                         value={operation.params.tokenAddress || ''}
                         onChange={(e) => updateOperationParam(operation.id, 'tokenAddress', e.target.value)}
                         placeholder="Адрес токена"
-                        className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs"
+                        className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 font-mono text-xs"
                       />
                     )}
                     
@@ -504,14 +504,14 @@ export const SweeperPage: React.FC = () => {
                           value={operation.params.callTarget || ''}
                           onChange={(e) => updateOperationParam(operation.id, 'callTarget', e.target.value)}
                           placeholder="Целевой адрес"
-                          className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs"
+                          className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 font-mono text-xs"
                         />
                         <textarea
                           value={operation.params.callData || ''}
                           onChange={(e) => updateOperationParam(operation.id, 'callData', e.target.value)}
                           placeholder="Данные вызова"
                           rows={1}
-                          className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs"
+                          className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 font-mono text-xs"
                         />
                         <input
                           type="number"
@@ -519,7 +519,7 @@ export const SweeperPage: React.FC = () => {
                           value={operation.params.ethAmount || ''}
                           onChange={(e) => updateOperationParam(operation.id, 'ethAmount', e.target.value)}
                           placeholder="Количество ETH (опционально)"
-                          className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs"
+                          className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 text-xs"
                         />
                       </div>
                     )}
@@ -610,7 +610,7 @@ export const SweeperPage: React.FC = () => {
             <select
               value={selectedNetwork}
               onChange={(e) => setSelectedNetwork(Number(e.target.value))}
-              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 text-sm"
             >
               {networks.map((network) => (
                 <option key={network.id} value={network.id}>
@@ -628,7 +628,7 @@ export const SweeperPage: React.FC = () => {
               value={contractAddress}
               onChange={(e) => setContractAddress(e.target.value)}
               placeholder="0x..."
-              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-sm"
             />
             {contractAddress && !isValidAddress(contractAddress) && (
               <p className="text-red-400 text-xs mt-1">Неверный адрес контракта</p>
