@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Send, Loader2, CheckCircle, AlertCircle, ExternalLink, Copy, Key, User, Zap, Globe } from 'lucide-react';
+import { Send, Loader2, CheckCircle, AlertCircle, ExternalLink, Copy, Key, User, Zap, Globe, Plus } from 'lucide-react';
 import { ethers } from 'ethers';
 import { useEnvWallet } from '../hooks/useEnvWallet';
 import { tenderlySimulator } from '../utils/tenderly';
@@ -9,6 +9,17 @@ interface TransactionStatus {
   status: 'idle' | 'pending' | 'success' | 'error';
   message: string;
   simulationUrl?: string;
+}
+
+interface AuthorizationFunction {
+  id: string;
+  name: string;
+  description: string;
+  params: {
+    target?: string;
+    value?: string;
+    data?: string;
+  };
 }
 
 const NETWORKS = [
@@ -40,6 +51,11 @@ export const AuthorizationPage: React.FC = () => {
   const [delegateAddress, setDelegateAddress] = useState('');
   const [gasLimit, setGasLimit] = useState('40000');
   const [selectedNetwork, setSelectedNetwork] = useState<number>(chainId || 1);
+  const [selectedFunction, setSelectedFunction] = useState<string>('authorization');
+  const [functionTarget, setFunctionTarget] = useState('');
+  const [functionValue, setFunctionValue] = useState('0');
+  const [functionData, setFunctionData] = useState('');
+  const [customFunctions, setCustomFunctions] = useState<AuthorizationFunction[]>([]);
   const [txStatus, setTxStatus] = useState<TransactionStatus>({
     hash: null,
     status: 'idle',
@@ -69,42 +85,90 @@ export const AuthorizationPage: React.FC = () => {
     }
   };
 
+  const addCustomFunction = () => {
+    const newFunction: AuthorizationFunction = {
+      id: Date.now().toString(),
+      name: `Функция ${customFunctions.length + 1}`,
+      description: 'Пользовательская функция',
+      params: {
+        target: '',
+        value: '0',
+        data: '0x'
+      }
+    };
+    setCustomFunctions(prev => [...prev, newFunction]);
+    setSelectedFunction(newFunction.id);
+  };
+
+  const updateCustomFunction = (id: string, field: string, value: string) => {
+    setCustomFunctions(prev => prev.map(func => 
+      func.id === id 
+        ? { ...func, params: { ...func.params, [field]: value } }
+        : func
+    ));
+  };
+
   const handleAuthorize = async () => {
     if (!provider || !userWallet || !relayerWallet) {
       setTxStatus({
         hash: null,
         status: 'error',
-        message: 'Wallet not configured',
+        message: 'Кошелек не настроен',
       });
       return;
     }
 
-    if (!isValidAddress(delegateAddress)) {
+    if (selectedFunction === 'authorization' && !isValidAddress(delegateAddress)) {
       setTxStatus({
         hash: null,
         status: 'error',
-        message: 'Invalid delegate address',
+        message: 'Неверный адрес делегата',
       });
       return;
     }
 
     try {
-      setTxStatus({ hash: null, status: 'pending', message: 'Preparing authorization...' });
+      setTxStatus({ hash: null, status: 'pending', message: 'Подготовка авторизации...' });
 
       const userNonce = await provider.getTransactionCount(userAddress!);
       const network = await provider.getNetwork();
       const currentChainId = Number(network.chainId);
 
-      // Prepare EIP-7702 authorization data
-      const authData = {
-        chainId: currentChainId,
-        address: delegateAddress,
-        nonce: ethers.toBeHex(userNonce),
-      };
+      let authData;
+      let targetAddress = delegateAddress;
 
-      setTxStatus({ hash: null, status: 'pending', message: 'Creating authorization signature...' });
+      if (selectedFunction === 'authorization') {
+        // Стандартная авторизация
+        authData = {
+          chainId: currentChainId,
+          address: delegateAddress,
+          nonce: ethers.toBeHex(userNonce),
+        };
+      } else {
+        // Пользовательская функция
+        const customFunc = customFunctions.find(f => f.id === selectedFunction);
+        if (!customFunc || !isValidAddress(customFunc.params.target || '')) {
+          setTxStatus({
+            hash: null,
+            status: 'error',
+            message: 'Неверные параметры функции',
+          });
+          return;
+        }
 
-      // Create authorization signature
+        targetAddress = customFunc.params.target!;
+        authData = {
+          chainId: currentChainId,
+          address: targetAddress,
+          nonce: ethers.toBeHex(userNonce),
+          value: customFunc.params.value || '0',
+          data: customFunc.params.data || '0x',
+        };
+      }
+
+      setTxStatus({ hash: null, status: 'pending', message: 'Создание подписи авторизации...' });
+
+      // Создание подписи авторизации
       const encodedAuth = ethers.concat([
         '0x05',
         ethers.encodeRlp([
@@ -125,26 +189,26 @@ export const AuthorizationPage: React.FC = () => {
         s: signature.s,
       };
 
-      // Simulate with Tenderly if available
+      // Симуляция с Tenderly если доступно
       let simulationResult = null;
       if (tenderlySimulator.isEnabled()) {
-        setTxStatus({ hash: null, status: 'pending', message: 'Running simulation...' });
+        setTxStatus({ hash: null, status: 'pending', message: 'Запуск симуляции...' });
         simulationResult = await tenderlySimulator.simulateEIP7702Authorization(
           currentChainId,
           userAddress!,
-          delegateAddress,
+          targetAddress,
           relayerAddress!,
           authWithSig,
           parseInt(gasLimit)
         );
       }
 
-      // For demo purposes, we'll show the authorization data
+      // Для демонстрации показываем данные авторизации
       const demoTxHash = 'demo-' + Date.now();
       setTxStatus({
         hash: demoTxHash,
         status: 'success',
-        message: 'Authorization prepared successfully',
+        message: 'Авторизация успешно подготовлена',
         simulationUrl: simulationResult?.simulationUrl,
       });
 
@@ -158,7 +222,7 @@ export const AuthorizationPage: React.FC = () => {
       setTxStatus({
         hash: null,
         status: 'error',
-        message: error instanceof Error ? error.message : 'Authorization failed',
+        message: error instanceof Error ? error.message : 'Ошибка авторизации',
       });
     }
   };
@@ -195,6 +259,19 @@ export const AuthorizationPage: React.FC = () => {
 
   const currentNetwork = NETWORKS.find(n => n.id === (chainId || selectedNetwork));
 
+  const isAuthorizeDisabled = () => {
+    if (!userWallet || !isValidPrivateKey(privateKey) || txStatus.status === 'pending') {
+      return true;
+    }
+    
+    if (selectedFunction === 'authorization') {
+      return !delegateAddress || !isValidAddress(delegateAddress);
+    } else {
+      const customFunc = customFunctions.find(f => f.id === selectedFunction);
+      return !customFunc || !customFunc.params.target || !isValidAddress(customFunc.params.target);
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto">
       <div className="grid grid-cols-12 gap-6">
@@ -204,7 +281,7 @@ export const AuthorizationPage: React.FC = () => {
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-3">
               <Globe className="w-4 h-4 text-gray-400" />
-              <h3 className="text-sm font-medium text-white">Network</h3>
+              <h3 className="text-sm font-medium text-white">Сеть</h3>
             </div>
             <select
               value={selectedNetwork}
@@ -223,76 +300,146 @@ export const AuthorizationPage: React.FC = () => {
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-3">
               <Key className="w-4 h-4 text-gray-400" />
-              <h3 className="text-sm font-medium text-white">Private Key</h3>
+              <h3 className="text-sm font-medium text-white">Приватный ключ</h3>
             </div>
             <input
               type="password"
               value={privateKey}
               onChange={(e) => handlePrivateKeyChange(e.target.value)}
-              placeholder="0x... or without 0x prefix"
+              placeholder="0x... или без префикса 0x"
               className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
             />
             {privateKey && !isValidPrivateKey(privateKey) && (
-              <p className="text-red-400 text-xs mt-1">Invalid private key format</p>
+              <p className="text-red-400 text-xs mt-1">Неверный формат приватного ключа</p>
             )}
           </div>
 
-          {/* Authorization Form */}
+          {/* Function Selection */}
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-white mb-4">Authorization Parameters</h3>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-2">
-                  Delegate Contract Address
-                </label>
-                <input
-                  type="text"
-                  value={delegateAddress}
-                  onChange={(e) => setDelegateAddress(e.target.value)}
-                  placeholder="0x..."
-                  className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
-                />
-                {delegateAddress && !isValidAddress(delegateAddress) && (
-                  <p className="text-red-400 text-xs mt-1">Invalid address format</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-2">
-                  Gas Limit
-                </label>
-                <input
-                  type="number"
-                  value={gasLimit}
-                  onChange={(e) => setGasLimit(e.target.value)}
-                  placeholder="40000"
-                  className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                />
-              </div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-white">Тип функции</h3>
+              <button
+                onClick={addCustomFunction}
+                className="flex items-center gap-1 px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-3 h-3" />
+                Добавить функцию
+              </button>
             </div>
+            
+            <select
+              value={selectedFunction}
+              onChange={(e) => setSelectedFunction(e.target.value)}
+              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            >
+              <option value="authorization">Стандартная авторизация</option>
+              {customFunctions.map((func) => (
+                <option key={func.id} value={func.id}>
+                  {func.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Function Parameters */}
+          <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
+            <h3 className="text-sm font-medium text-white mb-4">Параметры</h3>
+            
+            {selectedFunction === 'authorization' ? (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-2">
+                    Адрес контракта делегата
+                  </label>
+                  <input
+                    type="text"
+                    value={delegateAddress}
+                    onChange={(e) => setDelegateAddress(e.target.value)}
+                    placeholder="0x..."
+                    className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                  />
+                  {delegateAddress && !isValidAddress(delegateAddress) && (
+                    <p className="text-red-400 text-xs mt-1">Неверный формат адреса</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-2">
+                    Лимит газа
+                  </label>
+                  <input
+                    type="number"
+                    value={gasLimit}
+                    onChange={(e) => setGasLimit(e.target.value)}
+                    placeholder="40000"
+                    className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  />
+                </div>
+              </div>
+            ) : (
+              // Custom function parameters
+              (() => {
+                const customFunc = customFunctions.find(f => f.id === selectedFunction);
+                if (!customFunc) return null;
+                
+                return (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-2">
+                        Целевой адрес
+                      </label>
+                      <input
+                        type="text"
+                        value={customFunc.params.target || ''}
+                        onChange={(e) => updateCustomFunction(customFunc.id, 'target', e.target.value)}
+                        placeholder="0x..."
+                        className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-2">
+                        Значение (ETH)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.001"
+                        value={customFunc.params.value || '0'}
+                        onChange={(e) => updateCustomFunction(customFunc.id, 'value', e.target.value)}
+                        placeholder="0"
+                        className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-2">
+                        Данные вызова
+                      </label>
+                      <textarea
+                        value={customFunc.params.data || '0x'}
+                        onChange={(e) => updateCustomFunction(customFunc.id, 'data', e.target.value)}
+                        placeholder="0x..."
+                        rows={2}
+                        className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                      />
+                    </div>
+                  </div>
+                );
+              })()
+            )}
 
             <button
               onClick={handleAuthorize}
-              disabled={
-                !userWallet ||
-                !delegateAddress ||
-                !isValidAddress(delegateAddress) ||
-                !isValidPrivateKey(privateKey) ||
-                txStatus.status === 'pending'
-              }
+              disabled={isAuthorizeDisabled()}
               className="w-full mt-4 bg-blue-600 text-white py-2 px-4 rounded text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              data-testid="auth-button"
             >
               {txStatus.status === 'pending' ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Processing...
+                  Обработка...
                 </>
               ) : (
                 <>
                   <Send className="w-4 h-4" />
-                  Authorize
+                  Авторизовать
                 </>
               )}
             </button>
@@ -300,7 +447,7 @@ export const AuthorizationPage: React.FC = () => {
 
           {/* Transaction Status */}
           {txStatus.message && (
-            <div className={`border rounded-lg p-4 ${getStatusColor()}`} data-testid="tx-status">
+            <div className={`border rounded-lg p-4 ${getStatusColor()}`}>
               <div className="flex items-center gap-2 mb-2">
                 {getStatusIcon()}
                 <span className="text-sm font-medium">{txStatus.message}</span>
@@ -324,7 +471,7 @@ export const AuthorizationPage: React.FC = () => {
                   className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs mt-2"
                 >
                   <ExternalLink className="w-3 h-3" />
-                  View in Tenderly Dashboard
+                  Посмотреть в Tenderly Dashboard
                 </a>
               )}
             </div>
@@ -337,10 +484,10 @@ export const AuthorizationPage: React.FC = () => {
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-3">
               <Globe className="w-4 h-4 text-green-400" />
-              <h3 className="text-sm font-medium text-white">Current Network</h3>
+              <h3 className="text-sm font-medium text-white">Текущая сеть</h3>
             </div>
             <div className="text-sm text-gray-300">
-              {currentNetwork?.name || 'Unknown'} ({currentNetwork?.currency || 'ETH'})
+              {currentNetwork?.name || 'Неизвестно'} ({currentNetwork?.currency || 'ETH'})
             </div>
             <div className="text-xs text-gray-500 mt-1">Chain ID: {chainId || selectedNetwork}</div>
           </div>
@@ -350,12 +497,12 @@ export const AuthorizationPage: React.FC = () => {
             <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-3">
                 <User className="w-4 h-4 text-blue-400" />
-                <h3 className="text-sm font-medium text-white">User Wallet</h3>
+                <h3 className="text-sm font-medium text-white">Кошелек пользователя</h3>
               </div>
               <div className="text-xs text-gray-400 font-mono mb-2">{userAddress}</div>
               {userBalance && (
                 <div className="text-xs text-gray-300">
-                  Balance: {parseFloat(userBalance).toFixed(4)} {currentNetwork?.currency || 'ETH'}
+                  Баланс: {parseFloat(userBalance).toFixed(4)} {currentNetwork?.currency || 'ETH'}
                 </div>
               )}
             </div>
@@ -366,12 +513,12 @@ export const AuthorizationPage: React.FC = () => {
             <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Zap className="w-4 h-4 text-purple-400" />
-                <h3 className="text-sm font-medium text-white">Relayer</h3>
+                <h3 className="text-sm font-medium text-white">Релейер</h3>
               </div>
               <div className="text-xs text-gray-400 font-mono mb-2">{relayerAddress}</div>
               {relayerBalance && (
                 <div className="text-xs text-gray-300">
-                  Balance: {parseFloat(relayerBalance).toFixed(4)} {currentNetwork?.currency || 'ETH'}
+                  Баланс: {parseFloat(relayerBalance).toFixed(4)} {currentNetwork?.currency || 'ETH'}
                 </div>
               )}
             </div>
@@ -382,14 +529,14 @@ export const AuthorizationPage: React.FC = () => {
             onClick={refreshBalances}
             className="w-full bg-gray-700 text-white py-2 px-4 rounded text-sm font-medium hover:bg-gray-600 transition-colors"
           >
-            Refresh Balances
+            Обновить балансы
           </button>
 
           {/* Info */}
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-white mb-2">About EIP-7702</h3>
+            <h3 className="text-sm font-medium text-white mb-2">О EIP-7702</h3>
             <p className="text-xs text-gray-400 leading-relaxed">
-              EIP-7702 allows EOAs to temporarily delegate execution to smart contracts while maintaining ownership.
+              EIP-7702 позволяет EOA временно делегировать выполнение смарт-контрактам, сохраняя при этом владение.
             </p>
           </div>
         </div>

@@ -61,11 +61,11 @@ export const SweeperPage: React.FC = () => {
   ];
 
   const functions = [
-    { id: 'sendETH' as FunctionType, name: 'Send ETH', icon: Send },
-    { id: 'sweepETH' as FunctionType, name: 'Sweep ETH', icon: ArrowUpRight },
-    { id: 'sweepTokens' as FunctionType, name: 'Sweep Tokens', icon: Coins },
-    { id: 'executeCall' as FunctionType, name: 'Execute Call', icon: Target },
-    { id: 'customSequence' as FunctionType, name: 'Custom Sequence', icon: Plus },
+    { id: 'sendETH' as FunctionType, name: 'Отправить ETH', icon: Send },
+    { id: 'sweepETH' as FunctionType, name: 'Собрать ETH', icon: ArrowUpRight },
+    { id: 'sweepTokens' as FunctionType, name: 'Собрать токены', icon: Coins },
+    { id: 'executeCall' as FunctionType, name: 'Выполнить вызов', icon: Target },
+    { id: 'customSequence' as FunctionType, name: 'Последовательность', icon: Plus },
   ];
 
   const isValidAddress = (address: string) => {
@@ -77,15 +77,15 @@ export const SweeperPage: React.FC = () => {
       setTxResult({
         hash: null,
         status: 'error',
-        message: 'Configuration incomplete',
+        message: 'Конфигурация неполная',
       });
       return;
     }
 
     try {
-      setTxResult({ hash: null, status: 'pending', message: `Executing ${functionName}...` });
+      setTxResult({ hash: null, status: 'pending', message: `Выполнение ${functionName}...` });
 
-      // Simulate with Tenderly if available
+      // Симуляция с Tenderly если доступно
       let simulationResult = null;
       if (tenderlySimulator.isEnabled()) {
         const contract = new ethers.Contract(contractAddress, sweeperABI, relayerWallet);
@@ -111,7 +111,7 @@ export const SweeperPage: React.FC = () => {
       setTxResult({
         hash: tx.hash,
         status: 'success',
-        message: `${functionName} executed successfully`,
+        message: `${functionName} выполнен успешно`,
         simulationUrl: simulationResult?.simulationUrl,
       });
 
@@ -120,7 +120,7 @@ export const SweeperPage: React.FC = () => {
       setTxResult({
         hash: null,
         status: 'error',
-        message: error instanceof Error ? error.message : `${functionName} failed`,
+        message: error instanceof Error ? error.message : `Ошибка ${functionName}`,
       });
     }
   };
@@ -135,14 +135,14 @@ export const SweeperPage: React.FC = () => {
         break;
       case 'sweepTokens':
         if (!isValidAddress(tokenAddress)) {
-          setTxResult({ hash: null, status: 'error', message: 'Invalid token address' });
+          setTxResult({ hash: null, status: 'error', message: 'Неверный адрес токена' });
           return;
         }
         executeContractFunction('sweepTokens', [tokenAddress]);
         break;
       case 'executeCall':
         if (!isValidAddress(callTarget)) {
-          setTxResult({ hash: null, status: 'error', message: 'Invalid target address' });
+          setTxResult({ hash: null, status: 'error', message: 'Неверный целевой адрес' });
           return;
         }
         const dataBytes = callData.startsWith('0x') ? callData : '0x' + callData;
@@ -156,12 +156,12 @@ export const SweeperPage: React.FC = () => {
 
   const executeCustomSequence = async () => {
     if (!relayerWallet || !provider || !contractAddress || sequenceOperations.length === 0) {
-      setTxResult({ hash: null, status: 'error', message: 'Invalid sequence configuration' });
+      setTxResult({ hash: null, status: 'error', message: 'Неверная конфигурация последовательности' });
       return;
     }
 
     try {
-      setTxResult({ hash: null, status: 'pending', message: 'Executing sequence...' });
+      setTxResult({ hash: null, status: 'pending', message: 'Выполнение последовательности...' });
 
       const contract = new ethers.Contract(contractAddress, sweeperABI, relayerWallet);
       const targets: string[] = [];
@@ -209,7 +209,7 @@ export const SweeperPage: React.FC = () => {
       setTxResult({
         hash: tx.hash,
         status: 'success',
-        message: `Sequence executed (${sequenceOperations.length} operations)`,
+        message: `Последовательность выполнена (${sequenceOperations.length} операций)`,
       });
 
     } catch (error) {
@@ -217,7 +217,7 @@ export const SweeperPage: React.FC = () => {
       setTxResult({
         hash: null,
         status: 'error',
-        message: error instanceof Error ? error.message : 'Sequence failed',
+        message: error instanceof Error ? error.message : 'Ошибка последовательности',
       });
     }
   };
@@ -279,7 +279,7 @@ export const SweeperPage: React.FC = () => {
       case 'sweepETH':
         return (
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-2">ETH Amount</label>
+            <label className="block text-xs font-medium text-gray-400 mb-2">Количество ETH</label>
             <input
               type="number"
               step="0.001"
@@ -293,7 +293,7 @@ export const SweeperPage: React.FC = () => {
       case 'sweepTokens':
         return (
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-2">Token Address</label>
+            <label className="block text-xs font-medium text-gray-400 mb-2">Адрес токена</label>
             <input
               type="text"
               value={tokenAddress}
@@ -307,7 +307,7 @@ export const SweeperPage: React.FC = () => {
         return (
           <div className="space-y-3">
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-2">Target Address</label>
+              <label className="block text-xs font-medium text-gray-400 mb-2">Целевой адрес</label>
               <input
                 type="text"
                 value={callTarget}
@@ -317,7 +317,7 @@ export const SweeperPage: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-2">Call Data</label>
+              <label className="block text-xs font-medium text-gray-400 mb-2">Данные вызова</label>
               <textarea
                 value={callData}
                 onChange={(e) => setCallData(e.target.value)}
@@ -327,7 +327,7 @@ export const SweeperPage: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-2">ETH Amount (optional)</label>
+              <label className="block text-xs font-medium text-gray-400 mb-2">Количество ETH (опционально)</label>
               <input
                 type="number"
                 step="0.001"
@@ -343,7 +343,7 @@ export const SweeperPage: React.FC = () => {
         return (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-white">Operations ({sequenceOperations.length})</span>
+              <span className="text-sm font-medium text-white">Операции ({sequenceOperations.length})</span>
               <div className="flex gap-1">
                 {['sendETH', 'sweepETH', 'sweepTokens', 'executeCall'].map((type) => (
                   <button
@@ -359,7 +359,7 @@ export const SweeperPage: React.FC = () => {
             
             {sequenceOperations.length === 0 ? (
               <div className="text-center py-4 text-gray-500 text-sm">
-                No operations added
+                Операции не добавлены
               </div>
             ) : (
               <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -383,7 +383,7 @@ export const SweeperPage: React.FC = () => {
                         step="0.001"
                         value={operation.params.ethAmount || ''}
                         onChange={(e) => updateOperationParam(operation.id, 'ethAmount', e.target.value)}
-                        placeholder="ETH Amount"
+                        placeholder="Количество ETH"
                         className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs"
                       />
                     )}
@@ -393,7 +393,7 @@ export const SweeperPage: React.FC = () => {
                         type="text"
                         value={operation.params.tokenAddress || ''}
                         onChange={(e) => updateOperationParam(operation.id, 'tokenAddress', e.target.value)}
-                        placeholder="Token Address"
+                        placeholder="Адрес токена"
                         className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs"
                       />
                     )}
@@ -404,13 +404,13 @@ export const SweeperPage: React.FC = () => {
                           type="text"
                           value={operation.params.callTarget || ''}
                           onChange={(e) => updateOperationParam(operation.id, 'callTarget', e.target.value)}
-                          placeholder="Target Address"
+                          placeholder="Целевой адрес"
                           className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs"
                         />
                         <textarea
                           value={operation.params.callData || ''}
                           onChange={(e) => updateOperationParam(operation.id, 'callData', e.target.value)}
-                          placeholder="Call Data"
+                          placeholder="Данные вызова"
                           rows={1}
                           className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs"
                         />
@@ -419,7 +419,7 @@ export const SweeperPage: React.FC = () => {
                           step="0.001"
                           value={operation.params.ethAmount || ''}
                           onChange={(e) => updateOperationParam(operation.id, 'ethAmount', e.target.value)}
-                          placeholder="ETH Amount (optional)"
+                          placeholder="Количество ETH (опционально)"
                           className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs"
                         />
                       </div>
@@ -460,7 +460,7 @@ export const SweeperPage: React.FC = () => {
         {/* Function Selection */}
         <div className="col-span-3">
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-white mb-3">Functions</h3>
+            <h3 className="text-sm font-medium text-white mb-3">Функции</h3>
             <div className="space-y-1">
               {functions.map((func) => {
                 const IconComponent = func.icon;
@@ -489,7 +489,7 @@ export const SweeperPage: React.FC = () => {
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-3">
               <Globe className="w-4 h-4 text-gray-400" />
-              <h3 className="text-sm font-medium text-white">Network</h3>
+              <h3 className="text-sm font-medium text-white">Сеть</h3>
             </div>
             <select
               value={selectedNetwork}
@@ -506,7 +506,7 @@ export const SweeperPage: React.FC = () => {
 
           {/* Contract Address */}
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
-            <label className="block text-xs font-medium text-gray-400 mb-2">Contract Address</label>
+            <label className="block text-xs font-medium text-gray-400 mb-2">Адрес контракта</label>
             <input
               type="text"
               value={contractAddress}
@@ -515,13 +515,13 @@ export const SweeperPage: React.FC = () => {
               className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
             />
             {contractAddress && !isValidAddress(contractAddress) && (
-              <p className="text-red-400 text-xs mt-1">Invalid contract address</p>
+              <p className="text-red-400 text-xs mt-1">Неверный адрес контракта</p>
             )}
           </div>
 
           {/* Function Parameters */}
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-white mb-3">Parameters</h3>
+            <h3 className="text-sm font-medium text-white mb-3">Параметры</h3>
             {renderFunctionInputs()}
           </div>
 
@@ -534,12 +534,12 @@ export const SweeperPage: React.FC = () => {
             {txResult.status === 'pending' ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Executing...
+                Выполнение...
               </>
             ) : (
               <>
                 <Send className="w-4 h-4" />
-                Execute
+                Выполнить
               </>
             )}
           </button>
@@ -570,7 +570,7 @@ export const SweeperPage: React.FC = () => {
                   className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs mt-2"
                 >
                   <ExternalLink className="w-3 h-3" />
-                  View in Tenderly Dashboard
+                  Посмотреть в Tenderly Dashboard
                 </a>
               )}
             </div>
@@ -583,10 +583,10 @@ export const SweeperPage: React.FC = () => {
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-3">
               <Globe className="w-4 h-4 text-green-400" />
-              <h3 className="text-sm font-medium text-white">Current Network</h3>
+              <h3 className="text-sm font-medium text-white">Текущая сеть</h3>
             </div>
             <div className="text-sm text-gray-300">
-              {currentNetwork?.name || 'Unknown'} ({currentNetwork?.currency || 'ETH'})
+              {currentNetwork?.name || 'Неизвестно'} ({currentNetwork?.currency || 'ETH'})
             </div>
             <div className="text-xs text-gray-500 mt-1">Chain ID: {chainId || selectedNetwork}</div>
           </div>
@@ -596,12 +596,12 @@ export const SweeperPage: React.FC = () => {
             <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Zap className="w-4 h-4 text-purple-400" />
-                <h3 className="text-sm font-medium text-white">Relayer</h3>
+                <h3 className="text-sm font-medium text-white">Релейер</h3>
               </div>
               <div className="text-xs text-gray-400 font-mono mb-2">{relayerAddress}</div>
               {relayerBalance && (
                 <div className="text-xs text-gray-300">
-                  Balance: {parseFloat(relayerBalance).toFixed(4)} {currentNetwork?.currency || 'ETH'}
+                  Баланс: {parseFloat(relayerBalance).toFixed(4)} {currentNetwork?.currency || 'ETH'}
                 </div>
               )}
             </div>
@@ -609,19 +609,19 @@ export const SweeperPage: React.FC = () => {
 
           {/* Contract Info */}
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-white mb-2">Contract</h3>
+            <h3 className="text-sm font-medium text-white mb-2">Контракт</h3>
             {contractAddress ? (
               <div className="text-xs text-gray-400 font-mono break-all">{contractAddress}</div>
             ) : (
-              <div className="text-xs text-gray-500">No contract selected</div>
+              <div className="text-xs text-gray-500">Контракт не выбран</div>
             )}
           </div>
 
           {/* Selected Function */}
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-white mb-2">Function</h3>
+            <h3 className="text-sm font-medium text-white mb-2">Функция</h3>
             <div className="text-xs text-gray-400">
-              {functions.find(f => f.id === selectedFunction)?.name || 'None selected'}
+              {functions.find(f => f.id === selectedFunction)?.name || 'Не выбрано'}
             </div>
           </div>
 
@@ -630,7 +630,7 @@ export const SweeperPage: React.FC = () => {
             onClick={refreshBalances}
             className="w-full bg-gray-700 text-white py-2 px-4 rounded text-sm font-medium hover:bg-gray-600 transition-colors"
           >
-            Refresh Balances
+            Обновить балансы
           </button>
         </div>
       </div>

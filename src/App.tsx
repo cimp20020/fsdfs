@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, Settings, ArrowLeft } from 'lucide-react';
+import { Shield, Settings } from 'lucide-react';
 import { AuthorizationPage } from './components/AuthorizationPage';
 import { SweeperPage } from './components/SweeperPage';
 import { useEnvWallet } from './hooks/useEnvWallet';
@@ -8,15 +8,15 @@ type Page = 'authorization' | 'sweeper';
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('authorization');
-  const { relayerAddress, relayerBalance, multiNetworkBalances } = useEnvWallet();
+  const { relayerAddress, relayerBalance, chainId } = useEnvWallet();
 
   const truncateAddress = (address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
   const pages = [
-    { id: 'authorization' as Page, name: 'EIP-7702 Authorization', icon: Shield },
-    { id: 'sweeper' as Page, name: 'Sweeper Contract', icon: Settings },
+    { id: 'authorization' as Page, name: 'EIP-7702 Авторизация', icon: Shield },
+    { id: 'sweeper' as Page, name: 'Sweeper Контракт', icon: Settings },
   ];
 
   return (
@@ -30,7 +30,7 @@ function App() {
                 <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                   <Shield className="w-5 h-5 text-white" />
                 </div>
-                <span className="text-lg font-semibold">EIP-7702 Platform</span>
+                <span className="text-lg font-semibold">EIP-7702 Платформа</span>
               </div>
               
               {/* Navigation */}
@@ -59,12 +59,12 @@ function App() {
             {relayerAddress && (
               <div className="flex items-center gap-4">
                 <div className="text-right">
-                  <div className="text-sm text-gray-400">Relayer</div>
+                  <div className="text-sm text-gray-400">Релейер</div>
                   <div className="text-sm font-mono">{truncateAddress(relayerAddress)}</div>
                 </div>
                 {relayerBalance && (
                   <div className="text-right">
-                    <div className="text-sm text-gray-400">Balance</div>
+                    <div className="text-sm text-gray-400">Баланс</div>
                     <div className="text-sm font-mono">{parseFloat(relayerBalance).toFixed(4)} ETH</div>
                   </div>
                 )}
