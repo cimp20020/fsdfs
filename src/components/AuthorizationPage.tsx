@@ -110,9 +110,9 @@ export const AuthorizationPage: React.FC = () => {
 
       // Create authorization signature with proper EIP-7702 structure
       const authTuple = [
-        chainId, // Use number directly
-        delegateAddress, // Use address directly
-        userNonce // Use number directly
+        ethers.toBeHex(chainId), // Convert to hex
+        delegateAddress, // Address is already correct format
+        ethers.toBeHex(userNonce) // Convert to hex
       ];
 
       // Create the authorization hash according to EIP-7702
