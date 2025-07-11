@@ -193,61 +193,49 @@ export const AuthorizationPage: React.FC = () => {
       // Get user nonce for authorization
       const userNonce = await provider.getTransactionCount(userWallet.address);
       
-      // Create EIP-7702 authorization message according to spec
-      // EIP-7702 authorization format: keccak256(MAGIC || rlp([chain_id, address, nonce]))
-      const MAGIC = '0x05'; // EIP-7702 magic byte
-      
-      // Create the authorization payload using RLP encoding as per EIP-7702 spec
-      // RLP encode [chain_id, address, nonce]
-      const authData = [
-        ethers.toBeHex(selectedNetwork),
-        contractAddress,
-        ethers.toBeHex(userNonce)
-      ];
-      
-      // For simplicity, we'll use ABI encoding instead of RLP for now
-      // In production, proper RLP encoding should be used
-      const rlpEncoded = ethers.AbiCoder.defaultAbiCoder().encode(
-        ['uint256', 'address', 'uint64'],
-        [selectedNetwork, contractAddress, userNonce]
-      );
-      
-      // Create the authorization hash: keccak256(MAGIC || rlp_encoded_data)
-      const authMessage = ethers.concat([MAGIC, rlpEncoded]);
-      const authHash = ethers.keccak256(authMessage);
-      
+      // Prepare EIP-7702 authorization data
+      const authData = {
+        chainId: selectedNetwork,
+        address: contractAddress,
+        nonce: ethers.toBeHex(userNonce),
+      };
+
       console.log('🔐 Creating EIP-7702 authorization:', {
         userAddress: userWallet.address,
         contractAddress,
         chainId: selectedNetwork,
         nonce: userNonce,
-        authHash
+        authData
       });
+
+      // Create authorization signature using proper RLP encoding
+      const encodedAuth = ethers.concat([
+        '0x05', // EIP-7702 magic byte
+        ethers.encodeRlp([
+          ethers.toBeHex(authData.chainId),
+          authData.address,
+          authData.nonce,
+        ]),
+      ]);
+
+      const authHash = ethers.keccak256(encodedAuth);
       
       // Sign the authorization hash with user's private key
-      const signature = await userWallet.signMessage(ethers.getBytes(authHash));
-      const sig = ethers.Signature.from(signature);
-      
-      // Create properly formatted authorization list
-      const authorizationList = [{
-        chainId: ethers.toBeHex(selectedNetwork),
-        address: contractAddress,
-        nonce: userNonce,
-        yParity: sig.v === 27 ? 0 : 1, // Convert v to yParity
-        r: sig.r,
-        s: sig.s
-      }];
-      
-      // Verify the authorization is properly formatted
-      console.log('📋 Authorization List:', {
-        chainId: authorizationList[0].chainId,
-        address: authorizationList[0].address,
-        nonce: authorizationList[0].nonce
-      });
+      const authSig = await userWallet.signMessage(ethers.getBytes(authHash));
+      const signature = ethers.Signature.from(authSig);
+
+      const authWithSig = {
+        ...authData,
+        yParity: signature.yParity === 0 ? '0x' : '0x01',
+        r: signature.r,
+        s: signature.s,
+      };
+
       console.log('✅ Authorization signature created:', {
-        yParity: authorizationList[0].yParity,
-        r: authorizationList[0].r,
-        s: authorizationList[0].s
+        yParity: authWithSig.yParity,
+        r: authWithSig.r,
+        s: authWithSig.s,
+        authHash: authHash
       });
 
       // Create transaction data based on selected function
@@ -319,25 +307,32 @@ export const AuthorizationPage: React.FC = () => {
       }
 
       // Send the actual EIP-7702 transaction
-      const gasConfig = getNetworkGasConfig(selectedNetwork);
+      const feeData = await provider.getFeeData();
+      const relayerNonce = await provider.getTransactionCount(relayerWallet.address);
       
       console.log('📡 Sending EIP-7702 transaction:', {
         to: userWallet.address,
         data: txData.slice(0, 20) + '...',
         value: txValue,
-        authorizationList
+        authorizationList: [authWithSig],
+        relayerNonce
       });
       
-      const tx = await relayerWallet.sendTransaction({
+      const txParams = {
+        type: 4, // EIP-7702 transaction type
+        chainId: selectedNetwork,
+        nonce: relayerNonce,
+        maxPriorityFeePerGas: feeData.maxPriorityFeePerGas!,
+        maxFeePerGas: feeData.maxFeePerGas!,
+        gasLimit: 200000,
         to: userWallet.address, // Send to user address (will be delegated to contract)
         data: txData,
         value: txValue,
-        gasLimit: gasConfig?.gasLimit || 200000,
-        maxFeePerGas: gasConfig?.maxFeePerGas || '50000000000',
-        maxPriorityFeePerGas: gasConfig?.maxPriorityFeePerGas || '2000000000',
-        type: 4, // EIP-7702 transaction type
-        authorizationList
-      });
+        accessList: [],
+        authorizationList: [authWithSig],
+      };
+
+      const tx = await relayerWallet.sendTransaction(txParams);
 
       console.log('✅ EIP-7702 Authorization transaction sent:', {
         hash: tx.hash,
