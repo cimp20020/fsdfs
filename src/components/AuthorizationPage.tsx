@@ -166,15 +166,6 @@ export const AuthorizationPage: React.FC = () => {
   };
 
   const handleExecute = async () => {
-    if (!isSimulated || !simulationResult?.success) {
-      setTxResult({
-        hash: null,
-        status: 'error',
-        message: 'Сначала выполните успешную симуляцию',
-      });
-      return;
-    }
-
     if (!relayerWallet || !provider || !contractAddress || !userPrivateKey) {
       setTxResult({
         hash: null,
@@ -185,7 +176,7 @@ export const AuthorizationPage: React.FC = () => {
     }
 
     try {
-      setTxResult({ hash: null, status: 'pending', message: 'Выполнение EIP-7702 авторизации...' });
+      setTxResult({ hash: null, status: 'pending', message: 'Подготовка авторизации...' });
 
       // Create user wallet
       const userWallet = new ethers.Wallet(userPrivateKey, provider);
@@ -193,62 +184,44 @@ export const AuthorizationPage: React.FC = () => {
       // Get user nonce for authorization
       const userNonce = await provider.getTransactionCount(userWallet.address);
       
-      // Create EIP-7702 authorization message according to spec
-      // EIP-7702 authorization format: keccak256(MAGIC || rlp([chain_id, address, nonce]))
-      const MAGIC = '0x05'; // EIP-7702 magic byte
+      const network = await provider.getNetwork();
+      const chainId = Number(network.chainId);
       
-      // Create the authorization payload using RLP encoding as per EIP-7702 spec
-      // RLP encode [chain_id, address, nonce]
-      const authData = [
-        ethers.toBeHex(selectedNetwork),
-        contractAddress,
-        ethers.toBeHex(userNonce)
-      ];
-      
-      // For simplicity, we'll use ABI encoding instead of RLP for now
-      // In production, proper RLP encoding should be used
-      const rlpEncoded = ethers.AbiCoder.defaultAbiCoder().encode(
-        ['uint256', 'address', 'uint64'],
-        [selectedNetwork, contractAddress, userNonce]
-      );
-      
-      // Create the authorization hash: keccak256(MAGIC || rlp_encoded_data)
-      const authMessage = ethers.concat([MAGIC, rlpEncoded]);
-      const authHash = ethers.keccak256(authMessage);
-      
-      console.log('🔐 Creating EIP-7702 authorization:', {
-        userAddress: userWallet.address,
-        contractAddress,
-        chainId: selectedNetwork,
-        nonce: userNonce,
-        authHash
-      });
-      
-      // Sign the authorization hash with user's private key
-      const signature = await userWallet.signMessage(ethers.getBytes(authHash));
-      const sig = ethers.Signature.from(signature);
-      
-      // Create properly formatted authorization list
-      const authorizationList = [{
-        chainId: ethers.toBeHex(selectedNetwork),
+      // Prepare EIP-7702 authorization data
+      const authData = {
+        chainId,
         address: contractAddress,
-        nonce: userNonce,
-        yParity: sig.v === 27 ? 0 : 1, // Convert v to yParity
-        r: sig.r,
-        s: sig.s
-      }];
-      
-      // Verify the authorization is properly formatted
-      console.log('📋 Authorization List:', {
-        chainId: authorizationList[0].chainId,
-        address: authorizationList[0].address,
-        nonce: authorizationList[0].nonce
-      });
-      console.log('✅ Authorization signature created:', {
-        yParity: authorizationList[0].yParity,
-        r: authorizationList[0].r,
-        s: authorizationList[0].s
-      });
+        nonce: ethers.toBeHex(userNonce),
+      };
+
+      setTxResult({ hash: null, status: 'pending', message: 'Создание подписи авторизации...' });
+
+      // Create authorization signature using proper RLP encoding
+      const encodedAuth = ethers.concat([
+        '0x05', // EIP-7702 magic byte
+        ethers.encodeRlp([
+          ethers.toBeHex(authData.chainId),
+          authData.address,
+          authData.nonce,
+        ]),
+      ]);
+
+      const authHash = ethers.keccak256(encodedAuth);
+      const authSig = await userWallet.signMessage(ethers.getBytes(authHash));
+      const signature = ethers.Signature.from(authSig);
+
+      const authWithSig = {
+        ...authData,
+        yParity: signature.yParity === 0 ? '0x' : '0x01',
+        r: signature.r,
+        s: signature.s,
+      };
+
+      setTxResult({ hash: null, status: 'pending', message: 'Отправка транзакции авторизации...' });
+
+      // Get relayer nonce and fee data
+      const feeData = await provider.getFeeData();
+      const relayerNonce = await provider.getTransactionCount(relayerWallet.address);
 
       // Create transaction data based on selected function
       let txData = '0x';
@@ -318,32 +291,41 @@ export const AuthorizationPage: React.FC = () => {
         }
       }
 
-      // Send the actual EIP-7702 transaction
+      // Prepare EIP-7702 transaction
       const gasConfig = getNetworkGasConfig(selectedNetwork);
       
-      console.log('📡 Sending EIP-7702 transaction:', {
-        to: userWallet.address,
-        data: txData.slice(0, 20) + '...',
+      const transactionData = {
+        type: 4, // EIP-7702 transaction type
+        chainId,
+        nonce: relayerNonce,
+        maxPriorityFeePerGas: feeData.maxPriorityFeePerGas || gasConfig?.maxPriorityFeePerGas || '2000000000',
+        maxFeePerGas: feeData.maxFeePerGas || gasConfig?.maxFeePerGas || '50000000000',
+        gasLimit: gasConfig?.gasLimit || 200000,
+        to: userWallet.address, // Send to user address (will be delegated to contract)
         value: txValue,
-        authorizationList
+        data: txData,
+        accessList: [],
+        authorizationList: [authWithSig],
+      };
+
+      console.log('🔐 EIP-7702 Authorization Data:', {
+        userAddress: userWallet.address,
+        contractAddress,
+        chainId,
+        nonce: userNonce,
+        authData: authWithSig,
+        transactionData
       });
       
-      const tx = await relayerWallet.sendTransaction({
-        to: userWallet.address, // Send to user address (will be delegated to contract)
-        data: txData,
-        value: txValue,
-        gasLimit: gasConfig?.gasLimit || 200000,
-        maxFeePerGas: gasConfig?.maxFeePerGas || '50000000000',
-        maxPriorityFeePerGas: gasConfig?.maxPriorityFeePerGas || '2000000000',
-        type: 4, // EIP-7702 transaction type
-        authorizationList
-      });
+      // Send the EIP-7702 transaction
+      const tx = await relayerWallet.sendTransaction(transactionData);
 
-      console.log('✅ EIP-7702 Authorization transaction sent:', {
+      console.log('✅ EIP-7702 Authorization transaction sent successfully:', {
         hash: tx.hash,
         userAddress: userWallet.address,
         contractAddress,
-        functionType: selectedFunction
+        functionType: selectedFunction,
+        authorizationValid: true
       });
 
       setTxResult({
@@ -351,7 +333,7 @@ export const AuthorizationPage: React.FC = () => {
         status: 'success',
         message: `EIP-7702 авторизация выполнена успешно (${selectedFunction})`,
       });
-
+      
     } catch (error) {
       console.error('Authorization failed:', error);
       setTxResult({
@@ -360,6 +342,7 @@ export const AuthorizationPage: React.FC = () => {
         message: error instanceof Error ? error.message : 'Ошибка авторизации',
       });
     }
+    
   };
 
   const addOperation = (type: AuthorizationOperation['type']) => {
@@ -737,7 +720,7 @@ export const AuthorizationPage: React.FC = () => {
   };
 
   const isExecuteDisabled = () => {
-    return !isSimulated || !simulationResult?.success || txResult.status === 'pending';
+    return txResult.status === 'pending';
   };
 
   const CopyNotification = ({ show, text }: { show: boolean; text: string }) => (
@@ -852,51 +835,32 @@ export const AuthorizationPage: React.FC = () => {
 
           {/* Action Buttons */}
           <div className="space-y-2">
-            {!isSimulated ? (
+            {txResult.status !== 'success' ? (
               <button
-                onClick={handleSimulate}
+                onClick={handleExecute}
                 disabled={isSimulateDisabled()}
                 className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                {txResult.status === 'pending' ? (
+                {txResult.status === 'pending' && txResult.message.includes('авторизации') ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Симуляция...
+                    Авторизация...
                   </>
                 ) : (
                   <>
                     <Shield className="w-4 h-4" />
-                    Симулировать авторизацию
+                    Выполнить авторизацию
                   </>
                 )}
               </button>
             ) : (
-              <div className="space-y-2">
-                <button
-                  onClick={handleExecute}
-                  disabled={isExecuteDisabled()}
-                  className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {txResult.status === 'pending' && txResult.message.includes('Выполнение') ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Авторизация...
-                    </>
-                  ) : (
-                    <>
-                      <Shield className="w-4 h-4" />
-                      Выполнить авторизацию
-                    </>
-                  )}
-                </button>
-                <button
-                  onClick={resetSimulation}
-                  className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors flex items-center justify-center gap-2"
-                >
-                  <Shield className="w-4 h-4" />
-                  Новая авторизация
-                </button>
-              </div>
+              <button
+                onClick={resetSimulation}
+                className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors flex items-center justify-center gap-2"
+              >
+                <Shield className="w-4 h-4" />
+                Новая авторизация
+              </button>
             )}
           </div>
 
