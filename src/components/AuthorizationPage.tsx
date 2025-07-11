@@ -32,9 +32,10 @@ type AuthorizationType = 'standard' | 'sendETH' | 'sweepETH' | 'sweepTokens' | '
 
 export const AuthorizationPage: React.FC = () => {
   const { relayerWallet, provider, relayerAddress, chainId, setRelayerNetwork } = useEnvWallet();
-  const [selectedNetwork, setSelectedNetwork] = useState<number>(chainId || 56);
+  const networks = getAllNetworks();
+  const [selectedNetwork, setSelectedNetwork] = useState<number>(chainId || networks[0]?.id || 56);
   const [contractAddress, setContractAddress] = useState(() => {
-    const network = getNetworkById(chainId || 56);
+    const network = getNetworkById(chainId || networks[0]?.id || 56);
     return network?.delegateAddress || '';
   });
   const [selectedFunction, setSelectedFunction] = useState<AuthorizationType>('standard');
@@ -55,7 +56,6 @@ export const AuthorizationPage: React.FC = () => {
   const [isSimulated, setIsSimulated] = useState(false);
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
 
-  const networks = getAllNetworks();
 
   // Update contract address when network changes
   React.useEffect(() => {
