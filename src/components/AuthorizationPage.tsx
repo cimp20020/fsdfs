@@ -596,6 +596,11 @@ export const AuthorizationPage: React.FC = () => {
             {/* RLP Encoded Data */}
             <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
               <h4 className="text-white font-medium mb-2">RLP кодированные данные:</h4>
+              <div className="font-mono text-xs text-white break-all bg-gray-900 p-2 rounded">
+                {authorizationDetails.encodedAuth}
+              </div>
+            </div>
+
             {/* Hash */}
             <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
               <h4 className="text-white font-medium mb-2">Хеш для подписи:</h4>
@@ -603,7 +608,7 @@ export const AuthorizationPage: React.FC = () => {
                 {authorizationDetails.authHash}
               </div>
             </div>
-              <div className="font-mono text-xs text-white break-all bg-gray-900 p-2 rounded">
+
             {/* Signature */}
             <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
               <h4 className="text-white font-medium mb-2">Подпись:</h4>
@@ -631,7 +636,7 @@ export const AuthorizationPage: React.FC = () => {
                 </div>
               </div>
             </div>
-                {authorizationDetails.encodedAuth}
+
             {/* Verification */}
             <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
               <h4 className="text-white font-medium mb-2">Проверка подписи:</h4>
@@ -652,14 +657,13 @@ export const AuthorizationPage: React.FC = () => {
                 </div>
               </div>
             </div>
-              </div>
+
             {/* Final Authorization */}
             <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
               <h4 className="text-white font-medium mb-2">Финальная авторизация (EIP-7702):</h4>
               <pre className="font-mono text-xs text-white bg-gray-900 p-2 rounded overflow-x-auto">
 {JSON.stringify(authorizationDetails.finalAuthorization, null, 2)}
               </pre>
-            </div>
             </div>
             {/* Copy Buttons */}
             <div className="flex gap-2 flex-wrap">
