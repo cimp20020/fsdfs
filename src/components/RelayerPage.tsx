@@ -89,37 +89,43 @@ export const RelayerPage: React.FC = () => {
           </div>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {networks.map((network) => (
-            <div key={network.id} className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-sm font-medium text-white">{network.name}</div>
-                <div className={`w-2 h-2 rounded-full ${
-                  network.id === chainId ? 'bg-green-400' : 'bg-gray-600'
-                }`} title={network.id === chainId ? 'Активная сеть' : 'Неактивная сеть'} />
-              </div>
-              <div className="space-y-1 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Chain ID:</span>
-                  <span className="text-white">{network.id}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Валюта:</span>
-                  <span className="text-white">{network.currency}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Gas Limit:</span>
-                  <span className="text-white">{network.gasConfig.gasLimit.toLocaleString()}</span>
-                </div>
-              </div>
-              <div className="mt-2 pt-2 border-t border-gray-700">
-                <div className="text-xs text-gray-400 mb-1">Delegate Address:</div>
-                <div className="text-xs font-mono text-white break-all">
-                  {network.delegateAddress}
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-700">
+                <th className="text-left py-2 px-3 text-gray-400 font-medium">Сеть</th>
+                <th className="text-left py-2 px-3 text-gray-400 font-medium">Chain ID</th>
+                <th className="text-left py-2 px-3 text-gray-400 font-medium">Валюта</th>
+                <th className="text-left py-2 px-3 text-gray-400 font-medium">Gas Limit</th>
+                <th className="text-left py-2 px-3 text-gray-400 font-medium">Delegate Address</th>
+                <th className="text-center py-2 px-3 text-gray-400 font-medium">Статус</th>
+              </tr>
+            </thead>
+            <tbody>
+              {networks.map((network) => (
+                <tr key={network.id} className={`border-b border-gray-800 hover:bg-gray-800/30 transition-colors ${
+                  network.id === chainId ? 'bg-green-500/5' : ''
+                }`}>
+                  <td className="py-3 px-3">
+                    <div className="font-medium text-white">{network.name}</div>
+                  </td>
+                  <td className="py-3 px-3 text-gray-300">{network.id}</td>
+                  <td className="py-3 px-3 text-gray-300">{network.currency}</td>
+                  <td className="py-3 px-3 text-gray-300">{network.gasConfig.gasLimit.toLocaleString()}</td>
+                  <td className="py-3 px-3">
+                    <div className="font-mono text-xs text-gray-300 max-w-32 truncate" title={network.delegateAddress}>
+                      {network.delegateAddress}
+                    </div>
+                  </td>
+                  <td className="py-3 px-3 text-center">
+                    <div className={`w-2 h-2 rounded-full mx-auto ${
+                      network.id === chainId ? 'bg-green-400' : 'bg-gray-600'
+                    }`} title={network.id === chainId ? 'Активная сеть' : 'Неактивная сеть'} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
