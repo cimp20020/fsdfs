@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { Wrench, Server } from 'lucide-react';
+import { Wrench, Server, Shield } from 'lucide-react';
+import { AuthorizationPage } from './components/AuthorizationPage';
 import { SweeperPage } from './components/SweeperPage';
 import { RelayerPage } from './components/RelayerPage';
 
-type Page = 'sweeper' | 'relayer';
+type Page = 'authorization' | 'sweeper' | 'relayer';
 
 function App() {
-  const [currentPage, setCurrentPage] = useState<Page>('sweeper');
+  const [currentPage, setCurrentPage] = useState<Page>('authorization');
 
   const pages = [
+    { id: 'authorization' as Page, name: 'EIP-7702 Авторизация', icon: Shield },
     { id: 'sweeper' as Page, name: 'Управление Контрактами', icon: Wrench },
     { id: 'relayer' as Page, name: 'Мониторинг Релейера', icon: Server },
   ];
@@ -43,6 +45,7 @@ function App() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
+        {currentPage === 'authorization' && <AuthorizationPage />}
         {currentPage === 'sweeper' && <SweeperPage />}
         {currentPage === 'relayer' && <RelayerPage />}
       </main>
