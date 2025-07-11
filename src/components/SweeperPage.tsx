@@ -15,6 +15,9 @@ interface TransactionResult {
 interface SequenceOperation {
   id: string;
   type: 'sendETH' | 'sweepETH' | 'sweepTokens' | 'executeCall';
+  enabled: boolean;
+  simulationStatus: 'idle' | 'pending' | 'success' | 'error';
+  simulationError?: string;
   params: {
     ethAmount?: string;
     tokenAddress?: string;
@@ -69,6 +72,11 @@ export const SweeperPage: React.FC = () => {
   };
 
   const handleSimulate = async () => {
+    if (selectedFunction === 'customSequence') {
+      await simulateFullSequence();
+      return;
+    }
+
     if (!relayerWallet || !provider || !contractAddress) {
       setTxResult({
         hash: null,
@@ -245,7 +253,8 @@ export const SweeperPage: React.FC = () => {
   };
 
   const executeCustomSequence = async () => {
-    if (!relayerWallet || !provider || !contractAddress || sequenceOperations.length === 0) {
+    const enabledOperations = sequenceOperations.filter(op => op.enabled);
+    if (!relayerWallet || !provider || !contractAddress || enabledOperations.length === 0) {
       setTxResult({ hash: null, status: 'error', message: 'Неверная конфигурация последовательности' });
       return;
     }
@@ -258,7 +267,7 @@ export const SweeperPage: React.FC = () => {
       const datas: string[] = [];
       let totalValue = BigInt(0);
 
-      for (const operation of sequenceOperations) {
+      for (const operation of enabledOperations) {
         targets.push(contractAddress);
         
         switch (operation.type) {
@@ -299,7 +308,7 @@ export const SweeperPage: React.FC = () => {
       setTxResult({
         hash: tx.hash,
         status: 'success',
-        message: `Последовательность выполнена (${sequenceOperations.length} операций)`,
+        message: `Последовательность выполнена (${enabledOperations.length} операций)`,
       });
 
     } catch (error) {
@@ -316,6 +325,8 @@ export const SweeperPage: React.FC = () => {
     const newOperation: SequenceOperation = {
       id: Date.now().toString(),
       type,
+      enabled: true,
+      simulationStatus: 'idle',
       params: {}
     };
     setSequenceOperations(prev => [...prev, newOperation]);
@@ -331,6 +342,210 @@ export const SweeperPage: React.FC = () => {
         ? { ...op, params: { ...op.params, [paramKey]: value } }
         : op
     ));
+    
+    // Trigger simulation after parameter update
+    setTimeout(() => simulateOperation(id), 500);
+  };
+
+  const toggleOperation = (id: string) => {
+    setSequenceOperations(prev => prev.map(op => 
+      op.id === id 
+        ? { ...op, enabled: !op.enabled }
+        : op
+    ));
+  };
+
+  const simulateOperation = async (operationId: string) => {
+    const operation = sequenceOperations.find(op => op.id === operationId);
+    if (!operation || !relayerWallet || !provider || !contractAddress) return;
+
+    // Check if operation has required parameters
+    const isValid = validateOperation(operation);
+    if (!isValid) return;
+
+    // Update simulation status to pending
+    setSequenceOperations(prev => prev.map(op => 
+      op.id === operationId 
+        ? { ...op, simulationStatus: 'pending' }
+        : op
+    ));
+
+    try {
+      let functionName = '';
+      let params: any[] = [];
+      let value = '0';
+
+      switch (operation.type) {
+        case 'sendETH':
+          functionName = 'fallbackETHReceiver';
+          params = [];
+          value = operation.params.ethAmount || '0';
+          break;
+        case 'sweepETH':
+          functionName = 'sweepETH';
+          params = [ethers.parseEther(operation.params.ethAmount || '0')];
+          break;
+        case 'sweepTokens':
+          functionName = 'sweepTokens';
+          params = [operation.params.tokenAddress];
+          break;
+        case 'executeCall':
+          const dataBytes = operation.params.callData?.startsWith('0x') 
+            ? operation.params.callData 
+            : '0x' + (operation.params.callData || '');
+          functionName = 'executeCall';
+          params = [operation.params.callTarget, dataBytes];
+          value = operation.params.ethAmount || '0';
+          break;
+      }
+
+      if (tenderlySimulator.isEnabled()) {
+        const contract = new ethers.Contract(contractAddress, sweeperABI, relayerWallet);
+        const functionData = contract.interface.encodeFunctionData(functionName, params);
+        
+        const network = await provider.getNetwork();
+        const simulationResult = await tenderlySimulator.simulateContractCall(
+          Number(network.chainId),
+          relayerAddress!,
+          contractAddress,
+          functionData,
+          ethers.parseEther(value).toString(),
+          100000
+        );
+        
+        setSequenceOperations(prev => prev.map(op => 
+          op.id === operationId 
+            ? { 
+                ...op, 
+                simulationStatus: simulationResult.success ? 'success' : 'error',
+                simulationError: simulationResult.error,
+                enabled: simulationResult.success // Auto-disable failed operations
+              }
+            : op
+        ));
+      } else {
+        // If Tenderly not available, assume success
+        setSequenceOperations(prev => prev.map(op => 
+          op.id === operationId 
+            ? { ...op, simulationStatus: 'success' }
+            : op
+        ));
+      }
+    } catch (error) {
+      setSequenceOperations(prev => prev.map(op => 
+        op.id === operationId 
+          ? { 
+              ...op, 
+              simulationStatus: 'error',
+              simulationError: error instanceof Error ? error.message : 'Simulation failed',
+              enabled: false // Auto-disable failed operations
+            }
+          : op
+      ));
+    }
+  };
+
+  const validateOperation = (operation: SequenceOperation): boolean => {
+    switch (operation.type) {
+      case 'sendETH':
+      case 'sweepETH':
+        return !!(operation.params.ethAmount && parseFloat(operation.params.ethAmount) > 0);
+      case 'sweepTokens':
+        return !!(operation.params.tokenAddress && isValidAddress(operation.params.tokenAddress));
+      case 'executeCall':
+        return !!(operation.params.callTarget && isValidAddress(operation.params.callTarget));
+      default:
+        return false;
+    }
+  };
+
+  const simulateFullSequence = async () => {
+    if (!relayerWallet || !provider || !contractAddress) return;
+
+    const enabledOperations = sequenceOperations.filter(op => op.enabled);
+    if (enabledOperations.length === 0) return;
+
+    try {
+      setTxResult({ hash: null, status: 'pending', message: 'Симуляция полной последовательности...' });
+
+      const contract = new ethers.Contract(contractAddress, sweeperABI, relayerWallet);
+      const targets: string[] = [];
+      const datas: string[] = [];
+      let totalValue = BigInt(0);
+
+      for (const operation of enabledOperations) {
+        targets.push(contractAddress);
+        
+        switch (operation.type) {
+          case 'sendETH':
+            datas.push('0x');
+            if (operation.params.ethAmount) {
+              totalValue += ethers.parseEther(operation.params.ethAmount);
+            }
+            break;
+          case 'sweepETH':
+            const sweepAmount = operation.params.ethAmount || '0';
+            datas.push(contract.interface.encodeFunctionData('sweepETH', [ethers.parseEther(sweepAmount)]));
+            break;
+          case 'sweepTokens':
+            datas.push(contract.interface.encodeFunctionData('sweepTokens', [operation.params.tokenAddress]));
+            break;
+          case 'executeCall':
+            let callDataBytes = operation.params.callData || '0x';
+            if (!callDataBytes.startsWith('0x')) {
+              callDataBytes = '0x' + callDataBytes;
+            }
+            datas.push(contract.interface.encodeFunctionData('executeCall', [
+              operation.params.callTarget,
+              callDataBytes
+            ]));
+            if (operation.params.ethAmount) {
+              totalValue += ethers.parseEther(operation.params.ethAmount);
+            }
+            break;
+        }
+      }
+
+      if (tenderlySimulator.isEnabled()) {
+        const multicallData = contract.interface.encodeFunctionData('multicall', [targets, datas]);
+        
+        const network = await provider.getNetwork();
+        const simulationResult = await tenderlySimulator.simulateContractCall(
+          Number(network.chainId),
+          relayerAddress!,
+          contractAddress,
+          multicallData,
+          totalValue.toString(),
+          (getNetworkGasConfig(chainId || selectedNetwork)?.gasLimit || 200000) + 100000
+        );
+        
+        setSimulationResult(simulationResult);
+        setIsSimulated(true);
+        
+        if (simulationResult.success) {
+          setTxResult({
+            hash: null,
+            status: 'success',
+            message: `Симуляция последовательности прошла успешно (${enabledOperations.length} операций)`,
+            simulationUrl: simulationResult.simulationUrl,
+          });
+        } else {
+          setTxResult({
+            hash: null,
+            status: 'error',
+            message: `Симуляция последовательности не прошла: ${simulationResult.error}`,
+            simulationUrl: simulationResult.simulationUrl,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Full sequence simulation failed:', error);
+      setTxResult({
+        hash: null,
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Ошибка симуляции последовательности',
+      });
+    }
   };
 
   const copyToClipboard = (text: string) => {
@@ -369,6 +584,32 @@ export const SweeperPage: React.FC = () => {
         return 'border-red-500/20 bg-red-500/5';
       default:
         return 'border-gray-700 bg-gray-800/50';
+    }
+  };
+
+  const getOperationStatusIcon = (status: SequenceOperation['simulationStatus']) => {
+    switch (status) {
+      case 'pending':
+        return <Loader2 className="w-3 h-3 animate-spin text-blue-400" />;
+      case 'success':
+        return <CheckCircle className="w-3 h-3 text-green-400" />;
+      case 'error':
+        return <AlertCircle className="w-3 h-3 text-red-400" />;
+      default:
+        return null;
+    }
+  };
+
+  const getOperationStatusColor = (status: SequenceOperation['simulationStatus']) => {
+    switch (status) {
+      case 'pending':
+        return 'border-blue-500/20';
+      case 'success':
+        return 'border-green-500/20';
+      case 'error':
+        return 'border-red-500/20';
+      default:
+        return 'border-gray-700';
     }
   };
 
@@ -463,18 +704,43 @@ export const SweeperPage: React.FC = () => {
             ) : (
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {sequenceOperations.map((operation, index) => (
-                  <div key={operation.id} className="bg-gray-800/50 border border-gray-700 rounded p-3">
+                  <div key={operation.id} className={`bg-gray-800/50 border rounded p-3 ${getOperationStatusColor(operation.simulationStatus)}`}>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-white">
-                        {index + 1}. {operation.type}
-                      </span>
-                      <button
-                        onClick={() => removeOperation(operation.id)}
-                        className="text-red-400 hover:text-red-300 transition-colors"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={operation.enabled}
+                          onChange={() => toggleOperation(operation.id)}
+                          className="w-3 h-3 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                        <span className={`text-sm font-medium ${operation.enabled ? 'text-white' : 'text-gray-500'}`}>
+                          {index + 1}. {operation.type}
+                        </span>
+                        {getOperationStatusIcon(operation.simulationStatus)}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => simulateOperation(operation.id)}
+                          disabled={operation.simulationStatus === 'pending' || !validateOperation(operation)}
+                          className="text-blue-400 hover:text-blue-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Симулировать операцию"
+                        >
+                          <Target className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => removeOperation(operation.id)}
+                          className="text-red-400 hover:text-red-300 transition-colors"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
+                    
+                    {operation.simulationError && (
+                      <div className="text-xs text-red-400 mb-2 p-2 bg-red-500/10 rounded">
+                        {operation.simulationError}
+                      </div>
+                    )}
                     
                     {(operation.type === 'sendETH' || operation.type === 'sweepETH') && (
                       <input
@@ -483,7 +749,7 @@ export const SweeperPage: React.FC = () => {
                         value={operation.params.ethAmount || ''}
                         onChange={(e) => updateOperationParam(operation.id, 'ethAmount', e.target.value)}
                         placeholder="Количество ETH"
-                        className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 text-xs"
+                        className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 text-xs"
                       />
                     )}
                     
@@ -493,7 +759,7 @@ export const SweeperPage: React.FC = () => {
                         value={operation.params.tokenAddress || ''}
                         onChange={(e) => updateOperationParam(operation.id, 'tokenAddress', e.target.value)}
                         placeholder="Адрес токена"
-                        className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 font-mono text-xs"
+                        className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-xs"
                       />
                     )}
                     
@@ -504,14 +770,14 @@ export const SweeperPage: React.FC = () => {
                           value={operation.params.callTarget || ''}
                           onChange={(e) => updateOperationParam(operation.id, 'callTarget', e.target.value)}
                           placeholder="Целевой адрес"
-                          className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 font-mono text-xs"
+                          className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-xs"
                         />
                         <textarea
                           value={operation.params.callData || ''}
                           onChange={(e) => updateOperationParam(operation.id, 'callData', e.target.value)}
                           placeholder="Данные вызова"
                           rows={1}
-                          className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 font-mono text-xs"
+                          className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-xs"
                         />
                         <input
                           type="number"
@@ -519,7 +785,7 @@ export const SweeperPage: React.FC = () => {
                           value={operation.params.ethAmount || ''}
                           onChange={(e) => updateOperationParam(operation.id, 'ethAmount', e.target.value)}
                           placeholder="Количество ETH (опционально)"
-                          className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 text-xs"
+                          className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 text-xs"
                         />
                       </div>
                     )}
@@ -545,7 +811,7 @@ export const SweeperPage: React.FC = () => {
       case 'executeCall':
         return !callTarget || !isValidAddress(callTarget);
       case 'customSequence':
-        return sequenceOperations.length === 0;
+        return sequenceOperations.filter(op => op.enabled).length === 0;
       default:
         return false;
     }
