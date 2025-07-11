@@ -180,3 +180,5 @@ export const RelayerPage: React.FC = () => {
     </div>
   );
 };
+
+export { RelayerPage }
