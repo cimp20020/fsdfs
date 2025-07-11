@@ -65,7 +65,7 @@ export const RelayerPage: React.FC = () => {
         {relayerAddress && (
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-4">
-              <Wallet className="w-5 h-5 text-blue-400" />
+              <Wallet className="w-5 h-5 text-gray-400" />
               <h2 className="text-lg font-semibold text-white">Адрес релейера</h2>
             </div>
             
@@ -86,7 +86,7 @@ export const RelayerPage: React.FC = () => {
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <Network className="w-5 h-5 text-purple-400" />
+              <Network className="w-5 h-5 text-gray-400" />
               <h2 className="text-lg font-semibold text-white">Конфигурация сетей</h2>
             </div>
             <div className="flex items-center gap-4">
@@ -95,7 +95,7 @@ export const RelayerPage: React.FC = () => {
                 disabled={isRefreshing}
                 className="flex items-center gap-2 px-3 py-1.5 bg-[#222225] text-white rounded text-sm hover:bg-[#2a2a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-4 h-4 text-gray-400 ${isRefreshing ? 'animate-spin' : ''}`} />
                 Обновить
               </button>
               <div className="text-sm text-gray-400">
