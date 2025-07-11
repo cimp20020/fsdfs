@@ -124,23 +124,7 @@ export const AuthorizationPage: React.FC = () => {
       const authHash = ethers.keccak256(encodedAuth);
       
       // Sign the hash directly (not as message)
-      const authSig = await userWallet.signTransaction({
-        type: 4,
-        chainId: chainId,
-        nonce: userNonce,
-        to: delegateAddress,
-        value: 0,
-        data: '0x',
-        gasLimit: parseInt(gasLimit),
-        authorizationList: [{
-          chainId: chainId,
-          address: delegateAddress,
-          nonce: userNonce,
-          yParity: 0,
-          r: '0x0000000000000000000000000000000000000000000000000000000000000000',
-          s: '0x0000000000000000000000000000000000000000000000000000000000000000'
-        }]
-      });
+      const authSig = await userWallet.sign(authHash);
 
       // Parse the signature
       const signature = ethers.Signature.from(authSig);
