@@ -153,19 +153,24 @@ export const RelayerPage: React.FC = () => {
               const isCurrentNetwork = network?.id === chainId;
               
               return (
-                <div key={networkName} className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
+                <div key={networkName} className={`bg-[#0a0a0a] border rounded-lg p-4 ${
+                  isCurrentNetwork ? 'border-green-500/30 bg-green-500/5' : 'border-gray-700'
+                }`}>
                   <div className="flex items-center justify-between mb-1">
                     <div className="text-sm font-medium text-gray-400">{networkName}</div>
                     {isCurrentNetwork && (
-                    <div className="text-lg font-semibold text-white">
-                      {parseFloat(data.balance).toFixed(4)}
-                    </div>
-                    <div className="text-xs text-gray-400">{data.currency}</div>
-                    {network && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        Chain ID: {network.id}
-                      </div>
+                      <div className="w-2 h-2 bg-green-400 rounded-full" title="Активная сеть" />
                     )}
+                  </div>
+                  <div className="text-lg font-semibold text-white">
+                    {parseFloat(data.balance).toFixed(4)}
+                  </div>
+                  <div className="text-xs text-gray-400">{data.currency}</div>
+                  {network && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      Chain ID: {network.id}
+                    </div>
+                  )}
                 </div>
               );
             })}
