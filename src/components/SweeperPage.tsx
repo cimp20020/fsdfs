@@ -681,35 +681,101 @@ export const SweeperPage: React.FC = () => {
 
           {/* Transaction Status */}
           {txResult.message && (
-            <div className={`border rounded-lg p-4 ${getStatusColor()}`}>
-              <div className="flex items-center gap-2 mb-2">
+            <div className={`border rounded-lg p-5 ${getStatusColor()}`}>
+              <div className="flex items-center gap-3 mb-4">
                 {getStatusIcon()}
-                <span className="text-sm font-medium">{txResult.message}</span>
+                <span className="text-base font-semibold">{txResult.message}</span>
               </div>
               
               {/* Simulation Details */}
               {simulationResult && (
-                <div className="mt-3 p-3 bg-gray-800/50 rounded border border-gray-700">
-                  <div className="text-xs font-medium text-gray-300 mb-2">Результат симуляции:</div>
-                  <div className="space-y-1 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Статус:</span>
-                      <span className={simulationResult.success ? 'text-green-400' : 'text-red-400'}>
-                        {simulationResult.success ? 'Успешно' : 'Ошибка'}
-                      </span>
-                    </div>
-                    {simulationResult.error && (
-                      <div className="mt-2">
-                        <div className="text-gray-400 mb-1">Ошибка:</div>
-                        <div className="text-red-400 text-xs font-mono bg-red-900/20 p-2 rounded">
-                          {simulationResult.error}
+                <div className="bg-gray-900/60 rounded-lg p-4 border border-gray-700/50">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className={`w-2 h-2 rounded-full ${simulationResult.success ? 'bg-green-400' : 'bg-red-400'}`}></div>
+                    <span className="text-sm font-medium text-gray-200">
+                      {simulationResult.success ? '✅ Симуляция успешна' : '❌ Симуляция не прошла'}
+                    </span>
+                  </div>
+                  
+                  {simulationResult.error && (
+                    <div className="mb-3">
+                      <div className="bg-red-900/30 border border-red-700/50 rounded-lg p-3">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <div className="text-red-300 font-medium text-sm mb-1">Ошибка выполнения:</div>
+                            <div className="text-red-200 text-sm font-mono bg-red-900/40 px-2 py-1 rounded">
+                              {simulationResult.error}
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    )}
-                    {simulationResult.logs && simulationResult.logs.length > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">События:</span>
-                        <span className="text-blue-400">{simulationResult.logs.length}</span>
+                    </div>
+                  )}
+                  
+                  {simulationResult.success && (
+                    <div className="space-y-2">
+                      {simulationResult.logs && simulationResult.logs.length > 0 && (
+                        <div className="flex items-center justify-between py-1">
+                          <span className="text-gray-400 text-sm">События (logs):</span>
+                          <span className="text-blue-400 font-medium">{simulationResult.logs.length}</span>
+                        </div>
+                      )}
+                      {simulationResult.balanceChanges && simulationResult.balanceChanges.length > 0 && (
+                        <div className="flex items-center justify-between py-1">
+                          <span className="text-gray-400 text-sm">Изменения баланса:</span>
+                          <span className="text-yellow-400 font-medium">{simulationResult.balanceChanges.length}</span>
+                        </div>
+                      )}
+                      {(!simulationResult.logs || simulationResult.logs.length === 0) && 
+                       (!simulationResult.balanceChanges || simulationResult.balanceChanges.length === 0) && (
+                        <div className="text-gray-500 text-sm italic">Нет дополнительной информации</div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {txResult.simulationUrl && (
+                    <div className="mt-3 pt-3 border-t border-gray-700/50">
+                      <a
+                        href={txResult.simulationUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                        Посмотреть в Tenderly Dashboard
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {txResult.hash && (
+                <div className="mt-4 p-3 bg-gray-800/50 rounded-lg border border-gray-700/50">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                    <span className="text-sm font-medium text-gray-200">Транзакция отправлена</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono text-gray-400 bg-gray-900/50 px-2 py-1 rounded">
+                      {txResult.hash}
+                    </span>
+                    <button
+                      onClick={() => copyToClipboard(txResult.hash!)}
+                      className="p-1 text-gray-400 hover:text-white rounded transition-colors"
+                    >
+                      <Copy className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
                       </div>
                     )}
                     {simulationResult.balanceChanges && simulationResult.balanceChanges.length > 0 && (
