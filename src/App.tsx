@@ -1,16 +1,14 @@
 import React, { useState } from 'react';
-import { Shield, Settings, Info } from 'lucide-react';
-import { AuthorizationPage } from './components/AuthorizationPage';
+import { Settings, Info } from 'lucide-react';
 import { SweeperPage } from './components/SweeperPage';
 import { RelayerPage } from './components/RelayerPage';
 
-type Page = 'authorization' | 'sweeper' | 'relayer';
+type Page = 'sweeper' | 'relayer';
 
 function App() {
-  const [currentPage, setCurrentPage] = useState<Page>('authorization');
+  const [currentPage, setCurrentPage] = useState<Page>('sweeper');
 
   const pages = [
-    { id: 'authorization' as Page, name: 'EIP-7702 Авторизация', icon: Shield },
     { id: 'sweeper' as Page, name: 'Sweeper Контракт', icon: Settings },
     { id: 'relayer' as Page, name: 'Информация о Релейере', icon: Info },
   ];
@@ -45,7 +43,6 @@ function App() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-6">
-        {currentPage === 'authorization' && <AuthorizationPage />}
         {currentPage === 'sweeper' && <SweeperPage />}
         {currentPage === 'relayer' && <RelayerPage />}
       </div>
