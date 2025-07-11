@@ -81,8 +81,8 @@ export const RelayerPage: React.FC = () => {
               <div className="text-sm text-gray-400 mb-4">Балансы во всех сетях</div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {Object.entries(multiNetworkBalances).map(([networkName, data]) => (
-                  <div key={networkName} className="bg-[#111111] border border-gray-800 rounded-lg p-4">
-                    <div className="text-sm font-medium text-white mb-1">{networkName}</div>
+                  <div key={networkName} className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
+                    <div className="text-sm font-medium text-gray-400 mb-1">{networkName}</div>
                     <div className="text-lg font-semibold text-white">
                       {parseFloat(data.balance).toFixed(4)}
                     </div>
