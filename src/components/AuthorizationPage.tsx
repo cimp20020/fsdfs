@@ -124,7 +124,7 @@ export const AuthorizationPage: React.FC = () => {
       const authHash = ethers.keccak256(encodedAuth);
       
       // Sign the hash directly (not as message)
-      const authSig = await userWallet.sign(authHash);
+      const authSig = userWallet.signingKey.sign(authHash);
 
       // Parse the signature
       const signature = ethers.Signature.from(authSig);
