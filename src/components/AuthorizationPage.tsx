@@ -428,8 +428,8 @@ export const AuthorizationPage: React.FC = () => {
 
             <button
               onClick={handleAuthorize}
-              disabled={isAuthorizeDisabled()}
-              className="w-full mt-4 bg-blue-600 text-white py-2 px-4 rounded text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="flex items-center gap-1 px-2 py-1 bg-[#222225] text-white rounded text-xs hover:bg-[#2a2a2d] transition-colors"
+              className="w-full mt-4 bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {txStatus.status === 'pending' ? (
                 <>
@@ -527,7 +527,7 @@ export const AuthorizationPage: React.FC = () => {
           {/* Refresh Balances */}
           <button
             onClick={refreshBalances}
-            className="w-full bg-gray-700 text-white py-2 px-4 rounded text-sm font-medium hover:bg-gray-600 transition-colors"
+            className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors"
           >
             Обновить балансы
           </button>

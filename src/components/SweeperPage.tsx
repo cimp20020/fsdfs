@@ -451,7 +451,7 @@ export const SweeperPage: React.FC = () => {
                   <button
                     key={type}
                     onClick={() => addOperation(type as SequenceOperation['type'])}
-                    className="px-2 py-1 bg-gray-700 text-gray-300 rounded text-xs hover:bg-gray-600 transition-colors"
+                    className="px-2 py-1 bg-[#222225] text-gray-300 rounded text-xs hover:bg-[#2a2a2d] transition-colors"
                   >
                     +{type}
                   </button>
@@ -635,7 +635,7 @@ export const SweeperPage: React.FC = () => {
               <button
                 onClick={handleSimulate}
                 disabled={isSimulateDisabled()}
-                className="w-full bg-purple-600 text-white py-2 px-4 rounded text-sm font-medium hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {txResult.status === 'pending' ? (
                   <>
@@ -654,7 +654,7 @@ export const SweeperPage: React.FC = () => {
                 <button
                   onClick={handleExecute}
                   disabled={isExecuteDisabled()}
-                  className="w-full bg-green-600 text-white py-2 px-4 rounded text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {txResult.status === 'pending' && txResult.message.includes('Выполнение') ? (
                     <>
@@ -670,7 +670,7 @@ export const SweeperPage: React.FC = () => {
                 </button>
                 <button
                   onClick={resetSimulation}
-                  className="w-full bg-gray-600 text-white py-2 px-4 rounded text-sm font-medium hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
+                  className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors flex items-center justify-center gap-2"
                 >
                   <Target className="w-4 h-4" />
                   Новая симуляция

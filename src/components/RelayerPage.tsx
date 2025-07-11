@@ -98,7 +98,7 @@ export const RelayerPage: React.FC = () => {
             </div>
             <button
               onClick={fetchMultiNetworkBalances}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 text-white rounded text-sm hover:bg-gray-600 transition-colors"
+              className="flex items-center gap-2 px-3 py-1.5 bg-[#222225] text-white rounded text-sm hover:bg-[#2a2a2d] transition-colors"
             >
               <RefreshCw className="w-4 h-4" />
               Обновить
@@ -124,14 +124,14 @@ export const RelayerPage: React.FC = () => {
         <div className="flex gap-3">
           <button
             onClick={refreshBalances}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-[#222225] text-white rounded hover:bg-[#2a2a2d] transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
             Обновить баланс текущей сети
           </button>
           <button
             onClick={fetchMultiNetworkBalances}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-[#222225] text-white rounded hover:bg-[#2a2a2d] transition-colors"
           >
             <Globe className="w-4 h-4" />
             Обновить все сети

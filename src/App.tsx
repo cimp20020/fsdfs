@@ -24,7 +24,7 @@ function App() {
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                 <Shield className="w-5 h-5 text-white" />
-              </div>
+            <div className="w-8 h-8 bg-[#222225] rounded-lg flex items-center justify-center">
               <span className="text-lg font-semibold">EIP-7702 Платформа</span>
             </div>
             
