@@ -6,7 +6,7 @@ import { tenderlySimulator } from '../utils/tenderly';
 import { getAllNetworks, getNetworkById, getTransactionUrl, getNetworkGasConfig } from '../config/networkConfig';
 
 
-export const AuthorizationForm: React.FC = () => {
+export const AuthorizationPage: React.FC = () => {
   const { wallet, provider } = useWallet();
   const [delegateAddress, setDelegateAddress] = useState('');
   const [relayerAddress, setRelayerAddress] = useState('');
