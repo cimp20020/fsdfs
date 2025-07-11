@@ -52,7 +52,7 @@ export const RelayerPage: React.FC = () => {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-5xl">
       {/* Copy Notifications */}
       <CopyNotification 
         show={copiedItem === 'relayer-address'} 
@@ -60,7 +60,7 @@ export const RelayerPage: React.FC = () => {
       />
       
       {/* Combined Information Block */}
-      <div className="bg-[#111111] border border-gray-800 rounded-lg p-6">
+      <div className="bg-[#111111] border border-gray-800 rounded-lg p-4 w-fit min-w-full">
         {/* Relayer Address Section */}
         {relayerAddress && (
           <div className="mb-8">
@@ -105,14 +105,14 @@ export const RelayerPage: React.FC = () => {
           </div>
           
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="text-sm w-auto">
               <thead>
                 <tr className="border-b border-gray-700">
-                  <th className="text-left py-2 px-3 text-gray-400 font-medium">Сеть</th>
-                  <th className="text-left py-2 px-3 text-gray-400 font-medium">Chain ID</th>
-                  <th className="text-left py-2 px-3 text-gray-400 font-medium">Баланс</th>
-                  <th className="text-left py-2 px-3 text-gray-400 font-medium">Gas Limit</th>
-                  <th className="text-left py-2 px-3 text-gray-400 font-medium">Delegate Address</th>
+                  <th className="text-left py-2 px-3 text-gray-400 font-medium whitespace-nowrap">Сеть</th>
+                  <th className="text-left py-2 px-3 text-gray-400 font-medium whitespace-nowrap">Chain ID</th>
+                  <th className="text-left py-2 px-3 text-gray-400 font-medium whitespace-nowrap">Баланс</th>
+                  <th className="text-left py-2 px-3 text-gray-400 font-medium whitespace-nowrap">Gas Limit</th>
+                  <th className="text-left py-2 px-3 text-gray-400 font-medium whitespace-nowrap">Delegate Address</th>
                 </tr>
               </thead>
               <tbody>
@@ -128,16 +128,16 @@ export const RelayerPage: React.FC = () => {
                       <td className="py-3 px-3 text-gray-300">{network.id}</td>
                       <td className="py-3 px-3">
                         {networkBalance ? (
-                          <div className="text-white font-medium">
+                          <div className="text-white font-medium whitespace-nowrap">
                             {parseFloat(networkBalance.balance).toFixed(4)} {networkBalance.currency}
                           </div>
                         ) : (
                           <div className="text-gray-500">—</div>
                         )}
                       </td>
-                      <td className="py-3 px-3 text-gray-300">{network.gasConfig.gasLimit.toLocaleString()}</td>
+                      <td className="py-2 px-3 text-gray-300 whitespace-nowrap">{network.gasConfig.gasLimit.toLocaleString()}</td>
                       <td className="py-3 px-3">
-                        <div className="font-mono text-xs text-gray-300 break-all">
+                        <div className="font-mono text-xs text-gray-300 whitespace-nowrap">
                           {network.delegateAddress}
                         </div>
                       </td>
