@@ -154,7 +154,7 @@ export const RelayerPage: React.FC = () => {
               
               return (
                 <div key={networkName} className={`bg-[#0a0a0a] border rounded-lg p-4 ${
-                  isCurrentNetwork ? 'border-green-500/30 bg-green-500/5' : 'border-gray-700'
+                  isCurrentNetwork ? 'border-blue-500/30 bg-blue-500/5' : 'border-gray-700'
                 }`}>
                   <div className="flex items-center justify-between mb-1">
                     <div className="text-sm font-medium text-gray-400">{networkName}</div>
