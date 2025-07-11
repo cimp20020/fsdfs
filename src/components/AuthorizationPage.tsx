@@ -123,7 +123,7 @@ export const AuthorizationPage: React.FC = () => {
 
       const authorization = {
         ...authData,
-        yParity: signature.yParity === 0 ? '0x00' : '0x01',
+        yParity: signature.yParity === 0 ? '0x' : '0x01',
         r: signature.r,
         s: signature.s,
       };
