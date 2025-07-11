@@ -67,13 +67,10 @@ export const RelayerPage: React.FC = () => {
               <div className="text-sm text-gray-400 mb-2">Адрес релейера</div>
               <div 
                 onClick={() => copyToClipboard(relayerAddress, 'relayer-address')}
-                className="text-white font-mono text-sm bg-gray-800/50 p-3 rounded border cursor-pointer hover:bg-gray-700/50 transition-colors flex items-center justify-between group"
+                className="text-white font-mono text-sm bg-[#0a0a0a] border border-gray-700 p-3 rounded cursor-pointer hover:bg-gray-800/50 transition-colors flex items-center justify-between group"
               >
                 <span>{relayerAddress}</span>
                 <Copy className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
-              </div>
-              <div className="text-xs text-gray-500 mt-1">
-                Сокращенно: {truncateAddress(relayerAddress)} • Нажмите для копирования
               </div>
             </div>
           )}
