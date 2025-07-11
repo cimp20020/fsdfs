@@ -958,7 +958,23 @@ export const SweeperPage: React.FC = () => {
               className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-sm"
             />
             {contractAddress && !isValidAddress(contractAddress) && (
-              <p className="text-red-400 text-xs mt-1">Неверный адрес контракта</p>
+              <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded">
+                <p className="text-red-400 text-xs flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  Неверный формат адреса Ethereum
+                </p>
+                <p className="text-red-300 text-xs mt-1">
+                  Адрес должен начинаться с 0x и содержать 40 шестнадцатеричных символов
+                </p>
+              </div>
+            )}
+            {contractAddress && isValidAddress(contractAddress) && (
+              <div className="mt-2 p-2 bg-green-500/10 border border-green-500/20 rounded">
+                <p className="text-green-400 text-xs flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3" />
+                  Валидный адрес Ethereum
+                </p>
+              </div>
             )}
           </div>
 
