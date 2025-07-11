@@ -698,18 +698,6 @@ export const SweeperPage: React.FC = () => {
                         {simulationResult.success ? 'Успешно' : 'Ошибка'}
                       </span>
                     </div>
-                    {simulationResult.gasUsed && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Газ использован:</span>
-                        <span className="text-white">{simulationResult.gasUsed.toLocaleString()}</span>
-                      </div>
-                    )}
-                    {simulationResult.gasLimit && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Лимит газа:</span>
-                        <span className="text-white">{simulationResult.gasLimit.toLocaleString()}</span>
-                      </div>
-                    )}
                     {simulationResult.error && (
                       <div className="mt-2">
                         <div className="text-gray-400 mb-1">Ошибка:</div>

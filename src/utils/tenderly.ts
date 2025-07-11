@@ -191,7 +191,7 @@ export class TenderlySimulator {
       if (result.error) {
         return {
           success: false,
-          error: result.error.message,
+          error: result.error.message || result.error.slug || 'Неизвестная ошибка',
         };
       }
 
@@ -207,43 +207,19 @@ export class TenderlySimulator {
         success: result.transaction.status,
         gasUsed: result.transaction.gas_used,
         gasLimit: result.transaction.gas,
-        method: result.simulation.method,
         logs: result.simulation.logs,
         balanceChanges: result.simulation.balance_diff,
         stateChanges: result.simulation.state_diff,
-        contracts: result.simulation.contracts,
-        addresses: result.simulation.addresses,
         simulationId: result.simulation.id,
         simulationUrl,
-        executionTime: result.simulation.created_at ? Date.now() - new Date(result.simulation.created_at).getTime() : undefined,
-        blockNumber: result.simulation.block_number,
-        transaction: {
-          hash: result.transaction.hash,
-          from: result.transaction.from,
-          to: result.transaction.to,
-          value: result.transaction.value,
-          gasPrice: result.transaction.gas_price,
-          gasUsed: result.transaction.gas_used,
-          gasLimit: result.transaction.gas,
-          nonce: result.transaction.nonce,
-          input: result.transaction.input,
-          status: result.transaction.status,
-          timestamp: result.simulation.created_at,
-          txType: result.transaction.type?.toString(),
-          effectiveGasPrice: result.transaction.effective_gas_price,
-        },
-        network: {
-          id: parseInt(networkId),
-          name: this.getNetworkName(parseInt(networkId)),
-          currency: this.getNetworkCurrency(parseInt(networkId))
-        }
+        error: !result.transaction.status ? (result.error?.message || 'execution reverted') : undefined
       };
 
     } catch (error) {
       console.error('❌ Tenderly simulation failed:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Simulation failed',
+        error: error instanceof Error ? error.message : 'Ошибка симуляции',
       };
     }
   }
