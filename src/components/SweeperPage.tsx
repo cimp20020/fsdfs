@@ -574,7 +574,7 @@ export const SweeperPage: React.FC = () => {
                     onClick={() => setSelectedFunction(func.id)}
                     className={`w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
                       selectedFunction === func.id
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-[#222225] text-white'
                         : 'text-gray-400 hover:text-white hover:bg-gray-800'
                     }`}
                   >
