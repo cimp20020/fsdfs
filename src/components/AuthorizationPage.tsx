@@ -24,6 +24,7 @@ export const AuthorizationPage: React.FC = () => {
     status: 'idle',
     message: '',
   });
+  const [authorizationDetails, setAuthorizationDetails] = useState<any>(null);
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
 
   const networks = getAllNetworks();
@@ -166,6 +167,24 @@ export const AuthorizationPage: React.FC = () => {
 
       // Store authorization for execution
       (window as any).pendingAuthorization = authorization;
+      
+      // Store authorization details for display
+      setAuthorizationDetails({
+        originalData: authData,
+        encodedAuth: encodedAuth,
+        authHash: authHash,
+        signature: authSig,
+        parsedSignature: {
+          r: signature.r,
+          s: signature.s,
+          yParity: signature.yParity,
+          v: signature.v
+        },
+        finalAuthorization: authorization,
+        recoveredAddress: ethers.verifyMessage(ethers.getBytes(authHash), authSig),
+        userAddress: userWallet.address,
+        isValidSignature: ethers.verifyMessage(ethers.getBytes(authHash), authSig).toLowerCase() === userWallet.address.toLowerCase()
+      });
 
     } catch (error) {
       console.error('Authorization preparation failed:', error);
@@ -330,6 +349,18 @@ export const AuthorizationPage: React.FC = () => {
       <CopyNotification 
         show={copiedItem === 'transaction-hash'} 
         text="Hash транзакции скопирован!" 
+      />
+      <CopyNotification 
+        show={copiedItem === 'authorization-json'} 
+        text="JSON авторизации скопирован!" 
+      />
+      <CopyNotification 
+        show={copiedItem === 'auth-hash'} 
+        text="Хеш авторизации скопирован!" 
+      />
+      <CopyNotification 
+        show={copiedItem === 'signature'} 
+        text="Подпись скопирована!" 
       />
 
       {/* Network Selection */}
@@ -517,6 +548,130 @@ export const AuthorizationPage: React.FC = () => {
               Посмотреть симуляцию в Tenderly
             </a>
           )}
+        </div>
+      )}
+
+      {/* Authorization Details */}
+      {authorizationDetails && (
+        <div className="bg-[#111111] border border-gray-800 rounded-lg p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <CheckCircle className="w-5 h-5 text-green-400" />
+            <h3 className="text-lg font-semibold text-white">Детали авторизации</h3>
+          </div>
+          
+          <div className="space-y-4 text-sm">
+            {/* Original Data */}
+            <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
+              <h4 className="text-white font-medium mb-2">Исходные данные:</h4>
+              <div className="space-y-1 font-mono text-xs">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Chain ID:</span>
+                  <span className="text-white">{authorizationDetails.originalData.chainId}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Address:</span>
+                  <span className="text-white break-all">{authorizationDetails.originalData.address}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Nonce:</span>
+                  <span className="text-white">{authorizationDetails.originalData.nonce}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* RLP Encoded Data */}
+            <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
+              <h4 className="text-white font-medium mb-2">RLP кодированные данные:</h4>
+            {/* Hash */}
+            <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
+              <h4 className="text-white font-medium mb-2">Хеш для подписи:</h4>
+              <div className="font-mono text-xs text-white break-all bg-gray-900 p-2 rounded">
+                {authorizationDetails.authHash}
+              </div>
+            </div>
+              <div className="font-mono text-xs text-white break-all bg-gray-900 p-2 rounded">
+            {/* Signature */}
+            <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
+              <h4 className="text-white font-medium mb-2">Подпись:</h4>
+              <div className="space-y-2">
+                <div className="font-mono text-xs text-white break-all bg-gray-900 p-2 rounded">
+                  {authorizationDetails.signature}
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-gray-400">r:</span>
+                    <div className="font-mono text-white break-all">{authorizationDetails.parsedSignature.r}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">s:</span>
+                    <div className="font-mono text-white break-all">{authorizationDetails.parsedSignature.s}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">yParity:</span>
+                    <div className="font-mono text-white">{authorizationDetails.parsedSignature.yParity}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">v:</span>
+                    <div className="font-mono text-white">{authorizationDetails.parsedSignature.v}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+                {authorizationDetails.encodedAuth}
+            {/* Verification */}
+            <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
+              <h4 className="text-white font-medium mb-2">Проверка подписи:</h4>
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Адрес пользователя:</span>
+                  <span className="text-white font-mono">{authorizationDetails.userAddress}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Восстановленный адрес:</span>
+                  <span className="text-white font-mono">{authorizationDetails.recoveredAddress}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Подпись валидна:</span>
+                  <span className={`font-medium ${authorizationDetails.isValidSignature ? 'text-green-400' : 'text-red-400'}`}>
+                    {authorizationDetails.isValidSignature ? '✅ Да' : '❌ Нет'}
+                  </span>
+                </div>
+              </div>
+            </div>
+              </div>
+            {/* Final Authorization */}
+            <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
+              <h4 className="text-white font-medium mb-2">Финальная авторизация (EIP-7702):</h4>
+              <pre className="font-mono text-xs text-white bg-gray-900 p-2 rounded overflow-x-auto">
+{JSON.stringify(authorizationDetails.finalAuthorization, null, 2)}
+              </pre>
+            </div>
+            </div>
+            {/* Copy Buttons */}
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={() => copyToClipboard(JSON.stringify(authorizationDetails.finalAuthorization, null, 2), 'authorization-json')}
+                className="px-3 py-1 bg-[#222225] text-white rounded text-xs hover:bg-[#2a2a2d] transition-colors flex items-center gap-1"
+              >
+                <Copy className="w-3 h-3" />
+                Копировать JSON
+              </button>
+              <button
+                onClick={() => copyToClipboard(authorizationDetails.authHash, 'auth-hash')}
+                className="px-3 py-1 bg-[#222225] text-white rounded text-xs hover:bg-[#2a2a2d] transition-colors flex items-center gap-1"
+              >
+                <Copy className="w-3 h-3" />
+                Копировать хеш
+              </button>
+              <button
+                onClick={() => copyToClipboard(authorizationDetails.signature, 'signature')}
+                className="px-3 py-1 bg-[#222225] text-white rounded text-xs hover:bg-[#2a2a2d] transition-colors flex items-center gap-1"
+              >
+                <Copy className="w-3 h-3" />
+                Копировать подпись
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
