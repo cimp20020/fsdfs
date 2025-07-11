@@ -190,40 +190,50 @@ export const AuthorizationPage: React.FC = () => {
       // Create user wallet
       const userWallet = new ethers.Wallet(userPrivateKey, provider);
       
-      // Get network configuration
-      const networkConfig = getNetworkById(selectedNetwork);
-      if (!networkConfig) {
-        throw new Error(`Network ${selectedNetwork} not supported`);
-      }
-
-      // Create EIP-7702 authorization transaction
-      const nonce = await provider.getTransactionCount(userWallet.address);
+      // Get user nonce for authorization
+      const userNonce = await provider.getTransactionCount(userWallet.address);
       
-      // Create authorization list for EIP-7702
+      // Create EIP-7702 authorization message according to spec
+      // EIP-7702 authorization format: keccak256(MAGIC || rlp([chain_id, address, nonce]))
+      const MAGIC = '0x05'; // EIP-7702 magic byte
+      
+      // Create the authorization payload
+      const authPayload = ethers.AbiCoder.defaultAbiCoder().encode(
+        ['uint256', 'address', 'uint64'],
+        [selectedNetwork, contractAddress, userNonce]
+      );
+      
+      // Create the full message with magic byte
+      const authMessage = ethers.concat([MAGIC, authPayload]);
+      const authHash = ethers.keccak256(authMessage);
+      
+      console.log('🔐 Creating EIP-7702 authorization:', {
+        userAddress: userWallet.address,
+        contractAddress,
+        chainId: selectedNetwork,
+        nonce: userNonce,
+        authHash
+      });
+      
+      // Sign the authorization hash with user's private key
+      const signature = await userWallet.signMessage(ethers.getBytes(authHash));
+      const sig = ethers.Signature.from(signature);
+      
+      // Create properly formatted authorization list
       const authorizationList = [{
         chainId: selectedNetwork,
         address: contractAddress,
-        nonce: nonce,
-        yParity: 0, // Will be set after signing
-        r: '0x0000000000000000000000000000000000000000000000000000000000000000',
-        s: '0x0000000000000000000000000000000000000000000000000000000000000000'
+        nonce: userNonce,
+        yParity: sig.v === 27 ? 0 : 1, // Convert v to yParity
+        r: sig.r,
+        s: sig.s
       }];
-
-      // Sign the authorization
-      const authHash = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(
-          ['uint256', 'address', 'uint256'],
-          [selectedNetwork, contractAddress, nonce]
-        )
-      );
       
-      const signature = await userWallet.signMessage(ethers.getBytes(authHash));
-      const { r, s, v } = ethers.Signature.from(signature);
-      
-      // Update authorization with signature
-      authorizationList[0].yParity = v - 27;
-      authorizationList[0].r = r;
-      authorizationList[0].s = s;
+      console.log('✅ Authorization signature created:', {
+        yParity: authorizationList[0].yParity,
+        r: authorizationList[0].r,
+        s: authorizationList[0].s
+      });
 
       // Create transaction data based on selected function
       let txData = '0x';
@@ -295,6 +305,14 @@ export const AuthorizationPage: React.FC = () => {
 
       // Send the actual EIP-7702 transaction
       const gasConfig = getNetworkGasConfig(selectedNetwork);
+      
+      console.log('📡 Sending EIP-7702 transaction:', {
+        to: userWallet.address,
+        data: txData.slice(0, 20) + '...',
+        value: txValue,
+        authorizationList
+      });
+      
       const tx = await relayerWallet.sendTransaction({
         to: userWallet.address, // Send to user address (will be delegated to contract)
         data: txData,
@@ -303,7 +321,7 @@ export const AuthorizationPage: React.FC = () => {
         maxFeePerGas: gasConfig?.maxFeePerGas || '50000000000',
         maxPriorityFeePerGas: gasConfig?.maxPriorityFeePerGas || '2000000000',
         type: 4, // EIP-7702 transaction type
-        authorizationList: authorizationList
+        authorizationList
       });
 
       console.log('✅ EIP-7702 Authorization transaction sent:', {
