@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { useEnvWallet } from '../hooks/useEnvWallet';
-import { getNetworkConfig } from '../config/networkConfig';
+import { getNetworkById } from '../config/networkConfig';
 import networks from '../config/networks.json';
 
 interface AuthorizationType {
@@ -68,7 +68,7 @@ export const AuthorizationPage: React.FC = () => {
 
   // Auto-fill contract address from network config
   useEffect(() => {
-    const networkConfig = getNetworkConfig(selectedNetwork);
+    const networkConfig = getNetworkById(selectedNetwork);
     if (networkConfig?.delegateAddress) {
       setContractAddress(networkConfig.delegateAddress);
     }
@@ -99,7 +99,7 @@ export const AuthorizationPage: React.FC = () => {
       console.log('Authorization Type:', selectedType);
 
       // Get network configuration
-      const networkConfig = getNetworkConfig(selectedNetwork);
+      const networkConfig = getNetworkById(selectedNetwork);
       if (!networkConfig) {
         throw new Error('Network configuration not found');
       }
@@ -457,11 +457,11 @@ export const AuthorizationPage: React.FC = () => {
               </label>
               <select
                 value={selectedNetwork}
-                onChange={(e) => setSelectedNetwork(e.target.value)}
+                onChange={(e) => setSelectedNetwork(Number(e.target.value))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {Object.entries(networks).map(([key, network]) => (
-                  <option key={key} value={key}>
+                {Object.entries(networks.networks).map(([key, network]) => (
+                  <option key={key} value={network.chainId}>
                     {network.name}
                   </option>
                 ))}
