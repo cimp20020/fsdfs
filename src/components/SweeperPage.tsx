@@ -964,17 +964,6 @@ export const SweeperPage: React.FC = () => {
                   <AlertCircle className="w-3 h-3" />
                   Неверный формат адреса Ethereum
                 </p>
-                <p className="text-red-300 text-xs mt-1">
-                  Адрес должен начинаться с 0x и содержать 40 шестнадцатеричных символов
-                </p>
-              </div>
-            )}
-            {contractAddress && isValidAddress(contractAddress) && (
-              <div className="mt-2 p-2 bg-green-500/10 border border-green-500/20 rounded">
-                <p className="text-green-400 text-xs flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3" />
-                  Валидный адрес Ethereum
-                </p>
               </div>
             )}
           </div>
