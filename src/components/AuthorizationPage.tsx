@@ -33,10 +33,7 @@ type AuthorizationType = 'standard' | 'sendETH' | 'sweepETH' | 'sweepTokens' | '
 export const AuthorizationPage: React.FC = () => {
   const { relayerWallet, provider, relayerAddress, chainId } = useEnvWallet();
   const [selectedNetwork, setSelectedNetwork] = useState<number>(chainId || 1);
-  const [contractAddress, setContractAddress] = useState(() => {
-    const network = getNetworkById(chainId || 1);
-    return network?.delegateAddress || '';
-  });
+  const [contractAddress, setContractAddress] = useState('');
   const [selectedFunction, setSelectedFunction] = useState<AuthorizationType>('standard');
   const [userPrivateKey, setUserPrivateKey] = useState('');
   const [recipientAddress, setRecipientAddress] = useState('');
@@ -57,13 +54,27 @@ export const AuthorizationPage: React.FC = () => {
 
   const networks = getAllNetworks();
 
-  // Update contract address when network changes
+  // Update contract address when network changes - get from networks.json
   React.useEffect(() => {
     const network = getNetworkById(selectedNetwork);
+    console.log('🌐 Network changed to:', selectedNetwork);
+    console.log('📋 Network config:', network);
     if (network?.delegateAddress) {
       setContractAddress(network.delegateAddress);
+      console.log('🎯 Set delegate address:', network.delegateAddress);
+    } else {
+      console.error('❌ No delegate address found for network:', selectedNetwork);
     }
   }, [selectedNetwork]);
+
+  // Initialize contract address on component mount
+  React.useEffect(() => {
+    const initialNetwork = getNetworkById(selectedNetwork);
+    if (initialNetwork?.delegateAddress) {
+      setContractAddress(initialNetwork.delegateAddress);
+      console.log('🚀 Initial delegate address set:', initialNetwork.delegateAddress);
+    }
+  }, []);
 
   // Authorization functions list
   const functions = [
@@ -114,11 +125,18 @@ export const AuthorizationPage: React.FC = () => {
       // Create user wallet for authorization
       const userWallet = new ethers.Wallet(userPrivateKey, provider);
       
+      console.log('🔐 Creating EIP-7702 authorization for:', {
+        userAddress: userWallet.address,
+        selectedNetwork,
+        contractAddress,
+        relayerAddress
+      });
+      
       // Simulate EIP-7702 authorization
       if (tenderlySimulator.isEnabled()) {
-        const network = await provider.getNetwork();
+        // Use selected network instead of provider network
         const simulationResult = await tenderlySimulator.simulateEIP7702Authorization(
-          Number(network.chainId),
+          selectedNetwork,
           userWallet.address,
           contractAddress,
           relayerAddress!,
@@ -190,8 +208,17 @@ export const AuthorizationPage: React.FC = () => {
       // Create user wallet
       const userWallet = new ethers.Wallet(userPrivateKey, provider);
       
+      console.log('🔐 Starting EIP-7702 authorization:', {
+        userAddress: userWallet.address,
+        selectedNetwork,
+        contractAddress,
+        functionType: selectedFunction
+      });
+      
       // Get user nonce for authorization
       const userNonce = await provider.getTransactionCount(userWallet.address);
+      
+      console.log('📊 User nonce:', userNonce);
       
       // Create EIP-7702 authorization according to exact specification
       // Format: keccak256(0x05 || rlp([chain_id, address, nonce]))
@@ -199,9 +226,11 @@ export const AuthorizationPage: React.FC = () => {
       // RLP encode the authorization tuple [chain_id, address, nonce]
       const authTuple = [
         ethers.toBeHex(selectedNetwork),
-        contractAddress.toLowerCase(),
+        contractAddress.toLowerCase(), // Ensure lowercase
         ethers.toBeHex(userNonce)
       ];
+      
+      console.log('📋 Authorization tuple:', authTuple);
       
       // Manual RLP encoding for the tuple
       const rlpEncoded = ethers.encodeRlp(authTuple);
@@ -211,10 +240,20 @@ export const AuthorizationPage: React.FC = () => {
       const authMessage = ethers.concat([MAGIC_BYTE, rlpEncoded]);
       const authHash = ethers.keccak256(authMessage);
       
+      console.log('🔍 EIP-7702 authorization details:', {
+        chainId: selectedNetwork,
+        delegateAddress: contractAddress,
+        nonce: userNonce,
+        authTuple,
+        rlpEncoded,
+        authMessage: ethers.hexlify(authMessage),
+        authHash
+      });
+      
       console.log('🔐 Creating EIP-7702 authorization:', {
         userAddress: userWallet.address,
         contractAddress,
-        chainId: selectedNetwork,
+        chainId: selectedNetwork, // This should match the selected network
         nonce: userNonce,
         authTuple,
         rlpEncoded,
@@ -229,17 +268,37 @@ export const AuthorizationPage: React.FC = () => {
       // Create properly formatted authorization list
       const authorizationList = [{
         chainId: ethers.toBeHex(selectedNetwork),
-        address: contractAddress,
+        address: contractAddress.toLowerCase(),
         nonce: ethers.toBeHex(userNonce),
         yParity: sig.yParity,
         r: sig.r,
         s: sig.s
       }];
       
-      console.log('✅ Authorization signature created:', {
+      console.log('✅ Authorization list created:', {
+        chainId: authorizationList[0].chainId,
+        address: authorizationList[0].address,
+        nonce: authorizationList[0].nonce,
         yParity: authorizationList[0].yParity,
         r: authorizationList[0].r,
         s: authorizationList[0].s
+      });
+      
+      // Verify we're using the correct network configuration
+      const networkConfig = getNetworkById(selectedNetwork);
+      if (!networkConfig) {
+        throw new Error(`Network configuration not found for chain ID: ${selectedNetwork}`);
+      }
+      
+      if (contractAddress.toLowerCase() !== networkConfig.delegateAddress.toLowerCase()) {
+        throw new Error(`Contract address mismatch. Expected: ${networkConfig.delegateAddress}, Got: ${contractAddress}`);
+      }
+      
+      console.log('✅ Network configuration verified:', {
+        networkName: networkConfig.name,
+        chainId: networkConfig.id,
+        delegateAddress: networkConfig.delegateAddress,
+        rpcUrl: networkConfig.rpcUrl
       });
 
       // Create transaction data based on selected function
@@ -313,11 +372,20 @@ export const AuthorizationPage: React.FC = () => {
       // Send the actual EIP-7702 transaction
       const gasConfig = getNetworkGasConfig(selectedNetwork);
       
+      console.log('📡 Sending EIP-7702 transaction with config:', {
+        networkName: networkConfig.name,
+        chainId: selectedNetwork,
+        gasLimit: gasConfig?.gasLimit,
+        maxFeePerGas: gasConfig?.maxFeePerGas,
+        maxPriorityFeePerGas: gasConfig?.maxPriorityFeePerGas
+      });
+      
       console.log('📡 Sending EIP-7702 transaction:', {
         to: userWallet.address,
         data: txData.slice(0, 20) + '...',
         value: txValue,
-        authorizationList
+        authorizationList,
+        type: 4
       });
       
       const tx = await relayerWallet.sendTransaction({
@@ -325,8 +393,8 @@ export const AuthorizationPage: React.FC = () => {
         data: txData,
         value: txValue,
         gasLimit: gasConfig?.gasLimit || 200000,
-        maxFeePerGas: gasConfig?.maxFeePerGas || '50000000000',
-        maxPriorityFeePerGas: gasConfig?.maxPriorityFeePerGas || '2000000000',
+        maxFeePerGas: gasConfig?.maxFeePerGas || ethers.parseUnits('50', 'gwei'),
+        maxPriorityFeePerGas: gasConfig?.maxPriorityFeePerGas || ethers.parseUnits('2', 'gwei'),
         type: 4, // EIP-7702 transaction type
         authorizationList
       });
@@ -825,14 +893,24 @@ export const AuthorizationPage: React.FC = () => {
             <input
               type="text"
               value={contractAddress}
-              readOnly
+              onChange={(e) => setContractAddress(e.target.value)}
               placeholder="0x..."
-              className={`w-full px-3 py-2 bg-[#0a0a0a] border rounded text-gray-300 placeholder-gray-500 font-mono text-sm cursor-not-allowed ${
+              className={`w-full px-3 py-2 bg-[#0a0a0a] border rounded text-white placeholder-gray-500 font-mono text-sm ${
                 contractAddress && isValidAddress(contractAddress) ? 'border-green-500' : 'border-gray-700'
               }`}
             />
             <div className="mt-2 text-xs text-gray-500">
-              Автоматически выбран из конфигурации сети
+              Автоматически заполняется из конфигурации сети (networks.json)
+            </div>
+            {contractAddress && (
+              <div className="mt-1 text-xs text-blue-400">
+                Сеть: {getNetworkById(selectedNetwork)?.name} | Delegate: {contractAddress}
+              </div>
+            )}
+            {!contractAddress && (
+              <div className="mt-1 text-xs text-red-400">
+                ⚠️ Delegate address не найден для выбранной сети
+              </div>
             </div>
           </div>
 
