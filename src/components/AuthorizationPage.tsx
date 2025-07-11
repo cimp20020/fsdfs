@@ -108,23 +108,49 @@ export const AuthorizationPage: React.FC = () => {
         nonce: ethers.toBeHex(userNonce),
       };
 
-      // Create authorization signature with proper RLP encoding
+      // Create authorization signature with proper EIP-7702 structure
+      const authTuple = [
+        chainId, // Use number directly
+        delegateAddress, // Use address directly
+        userNonce // Use number directly
+      ];
+
+      // Create the authorization hash according to EIP-7702
       const encodedAuth = ethers.concat([
-        '0x05',
-        ethers.encodeRlp([
-          ethers.toBeHex(authData.chainId),
-          authData.address,
-          authData.nonce,
-        ]),
+        '0x05', // EIP-7702 magic byte
+        ethers.encodeRlp(authTuple)
       ]);
 
       const authHash = ethers.keccak256(encodedAuth);
-      const authSig = await userWallet.signMessage(ethers.getBytes(authHash));
-      const signature = ethers.Signature.from(authSig);
+      
+      // Sign the hash directly (not as message)
+      const authSig = await userWallet.signTransaction({
+        type: 4,
+        chainId: chainId,
+        nonce: userNonce,
+        to: delegateAddress,
+        value: 0,
+        data: '0x',
+        gasLimit: parseInt(gasLimit),
+        authorizationList: [{
+          chainId: chainId,
+          address: delegateAddress,
+          nonce: userNonce,
+          yParity: 0,
+          r: '0x0000000000000000000000000000000000000000000000000000000000000000',
+          s: '0x0000000000000000000000000000000000000000000000000000000000000000'
+        }]
+      });
 
+      // Parse the signature
+      const signature = ethers.Signature.from(authSig);
+      
+      // Create proper authorization structure
       const authorization = {
-        ...authData,
-        yParity: signature.yParity === 0 ? '0x' : '0x01',
+        chainId: chainId,
+        address: delegateAddress,
+        nonce: userNonce,
+        yParity: signature.yParity,
         r: signature.r,
         s: signature.s,
       };
@@ -170,10 +196,14 @@ export const AuthorizationPage: React.FC = () => {
       
       // Store authorization details for display
       setAuthorizationDetails({
-        originalData: authData,
+        originalData: {
+          chainId: ethers.toBeHex(chainId),
+          address: delegateAddress.toLowerCase(),
+          nonce: ethers.toBeHex(userNonce)
+        },
         encodedAuth: encodedAuth,
         authHash: authHash,
-        signature: authSig,
+        signature: authSig || 'N/A',
         parsedSignature: {
           r: signature.r,
           s: signature.s,
@@ -181,9 +211,9 @@ export const AuthorizationPage: React.FC = () => {
           v: signature.v
         },
         finalAuthorization: authorization,
-        recoveredAddress: ethers.verifyMessage(ethers.getBytes(authHash), authSig),
+        recoveredAddress: ethers.recoverAddress(authHash, signature),
         userAddress: userWallet.address,
-        isValidSignature: ethers.verifyMessage(ethers.getBytes(authHash), authSig).toLowerCase() === userWallet.address.toLowerCase()
+        isValidSignature: ethers.recoverAddress(authHash, signature).toLowerCase() === userWallet.address.toLowerCase()
       });
 
     } catch (error) {
