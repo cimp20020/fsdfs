@@ -182,16 +182,26 @@ export class TenderlySimulator {
       );
 
       if (!response.ok) {
+        let errorMessage = `Tenderly API error: ${response.status}`;
         try {
-          const errorData = await response.json();
+          const responseText = await response.text();
+          const errorData = JSON.parse(responseText);
           if (errorData.error && errorData.error.message) {
-            throw new Error(errorData.error.message);
+            // Extract concise error message
+            const fullMessage = errorData.error.message;
+            if (fullMessage.includes('insufficient funds')) {
+              errorMessage = 'insufficient funds';
+            } else if (fullMessage.includes('execution reverted')) {
+              errorMessage = 'execution reverted';
+            } else {
+              errorMessage = fullMessage;
+            }
           }
-          throw new Error(`Tenderly API error: ${response.status}`);
         } catch (parseError) {
-          const errorText = await response.text();
-          throw new Error(`Tenderly API error: ${response.status} - ${errorText}`);
+          // If we can't parse as JSON, use the raw text
+          // responseText is already read above, so we don't read again
         }
+        throw new Error(errorMessage);
       }
 
       const result: TenderlySimulationResponse = await response.json();
