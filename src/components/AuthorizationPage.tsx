@@ -330,7 +330,7 @@ export const AuthorizationPage: React.FC = () => {
         maxPriorityFeePerGas: feeData.maxPriorityFeePerGas!,
         maxFeePerGas: feeData.maxFeePerGas!,
         gasLimit: 200000,
-        to: userWallet.address, // Send to user address (will be delegated to contract)
+        to: contractAddress, // Send to delegate contract address
         data: txData,
         value: txValue,
         accessList: [],
