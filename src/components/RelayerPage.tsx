@@ -10,6 +10,7 @@ export const RelayerPage: React.FC = () => {
   } = useEnvWallet();
 
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const truncateAddress = (address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -22,6 +23,15 @@ export const RelayerPage: React.FC = () => {
       setTimeout(() => setCopiedItem(null), 2000); // Hide notification after 2 seconds
     } catch (error) {
       console.error('Failed to copy:', error);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await fetchMultiNetworkBalances();
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -52,10 +62,11 @@ export const RelayerPage: React.FC = () => {
             </div>
             {multiNetworkBalances && Object.keys(multiNetworkBalances).length > 0 && (
               <button
-                onClick={fetchMultiNetworkBalances}
-                className="flex items-center gap-2 px-3 py-1.5 bg-[#222225] text-white rounded text-sm hover:bg-[#2a2a2d] transition-colors"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="flex items-center gap-2 px-3 py-1.5 bg-[#222225] text-white rounded text-sm hover:bg-[#2a2a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <RefreshCw className="w-4 h-4" />
+                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                 Обновить
               </button>
             )}
