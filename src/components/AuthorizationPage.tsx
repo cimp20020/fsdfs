@@ -462,7 +462,7 @@ export const AuthorizationPage: React.FC = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {Object.entries(networks.networks).map(([key, network]) => (
-                  <option key={key} value={network.chainId}>
+                  <option key={key} value={network.id}>
                     {network.name}
                   </option>
                 ))}
