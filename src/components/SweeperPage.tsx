@@ -50,6 +50,7 @@ export const SweeperPage: React.FC = () => {
     status: 'idle',
     message: '',
   });
+  const [simulationResult, setSimulationResult] = useState<any>(null);
 
   // Sweeper contract ABI
   const sweeperABI = [
@@ -83,9 +84,10 @@ export const SweeperPage: React.FC = () => {
     }
 
     try {
-      setTxResult({ hash: null, status: 'pending', message: `Выполнение ${functionName}...` });
+      setTxResult({ hash: null, status: 'pending', message: `Симуляция ${functionName}...` });
+      setSimulationResult(null);
 
-      // Симуляция с Tenderly если доступно
+      // Обязательная симуляция с Tenderly
       let simulationResult = null;
       if (tenderlySimulator.isEnabled()) {
         const contract = new ethers.Contract(contractAddress, sweeperABI, relayerWallet);
@@ -100,6 +102,33 @@ export const SweeperPage: React.FC = () => {
           ethers.parseEther(value).toString(),
           200000
         );
+        
+        setSimulationResult(simulationResult);
+        
+        // Если симуляция не прошла, не выполняем транзакцию
+        if (!simulationResult.success) {
+          setTxResult({
+            hash: null,
+            status: 'error',
+            message: `Симуляция не прошла: ${simulationResult.error}`,
+            simulationUrl: simulationResult.simulationUrl,
+          });
+          return;
+        }
+        
+        setTxResult({ 
+          hash: null, 
+          status: 'pending', 
+          message: `Симуляция успешна. Выполнение ${functionName}...`,
+          simulationUrl: simulationResult.simulationUrl,
+        });
+      } else {
+        setTxResult({
+          hash: null,
+          status: 'error',
+          message: 'Tenderly не настроен. Симуляция недоступна.',
+        });
+        return;
       }
 
       const contract = new ethers.Contract(contractAddress, sweeperABI, relayerWallet);
@@ -549,6 +578,54 @@ export const SweeperPage: React.FC = () => {
                 {getStatusIcon()}
                 <span className="text-sm font-medium">{txResult.message}</span>
               </div>
+              
+              {/* Simulation Details */}
+              {simulationResult && (
+                <div className="mt-3 p-3 bg-gray-800/50 rounded border border-gray-700">
+                  <div className="text-xs font-medium text-gray-300 mb-2">Результат симуляции:</div>
+                  <div className="space-y-1 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Статус:</span>
+                      <span className={simulationResult.success ? 'text-green-400' : 'text-red-400'}>
+                        {simulationResult.success ? 'Успешно' : 'Ошибка'}
+                      </span>
+                    </div>
+                    {simulationResult.gasUsed && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Газ использован:</span>
+                        <span className="text-white">{simulationResult.gasUsed.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {simulationResult.gasLimit && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Лимит газа:</span>
+                        <span className="text-white">{simulationResult.gasLimit.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {simulationResult.error && (
+                      <div className="mt-2">
+                        <div className="text-gray-400 mb-1">Ошибка:</div>
+                        <div className="text-red-400 text-xs font-mono bg-red-900/20 p-2 rounded">
+                          {simulationResult.error}
+                        </div>
+                      </div>
+                    )}
+                    {simulationResult.logs && simulationResult.logs.length > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">События:</span>
+                        <span className="text-blue-400">{simulationResult.logs.length}</span>
+                      </div>
+                    )}
+                    {simulationResult.balanceChanges && simulationResult.balanceChanges.length > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Изменения баланса:</span>
+                        <span className="text-yellow-400">{simulationResult.balanceChanges.length}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
               {txResult.hash && (
                 <div className="flex items-center gap-2 mt-2">
                   <span className="text-xs font-mono text-gray-400">{txResult.hash}</span>
