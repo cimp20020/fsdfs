@@ -20,18 +20,8 @@ function App() {
       {/* Header */}
       <div className="border-b border-gray-800 bg-[#111111]">
         <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <Shield className="w-5 h-5 text-white" />
-              </div>
-              <div className="w-8 h-8 bg-[#222225] rounded-lg flex items-center justify-center">
-                <span className="text-lg font-semibold">EIP-7702 Платформа</span>
-              </div>
-            </div>
-            
-            {/* Navigation */}
-            <nav className="flex items-center gap-1">
+          {/* Navigation */}
+          <nav className="flex items-center gap-1">
               {pages.map((page) => {
                 const IconComponent = page.icon;
                 return (
@@ -40,7 +30,7 @@ function App() {
                     onClick={() => setCurrentPage(page.id)}
                     className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                       currentPage === page.id
-                        ? 'bg-gray-800 text-white'
+                        ? 'bg-[#222225] text-white'
                         : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                     }`}
                   >
@@ -49,8 +39,7 @@ function App() {
                   </button>
                 );
               })}
-            </nav>
-          </div>
+          </nav>
         </div>
       </div>
 
