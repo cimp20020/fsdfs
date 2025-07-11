@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Send, ArrowUpRight, Coins, Target, Loader2, CheckCircle, AlertCircle, ExternalLink, Copy, Trash2, Plus, Globe, Zap } from 'lucide-react';
+import { Send, ArrowUpRight, Coins, Target, Loader2, CheckCircle, AlertCircle, ExternalLink, Copy, Trash2, Plus, Globe } from 'lucide-react';
 import { ethers } from 'ethers';
 import { useEnvWallet } from '../hooks/useEnvWallet';
 import { tenderlySimulator } from '../utils/tenderly';
@@ -35,7 +35,7 @@ const NETWORKS = [
 ];
 
 export const SweeperPage: React.FC = () => {
-  const { relayerWallet, provider, relayerAddress, relayerBalance, chainId, refreshBalances } = useEnvWallet();
+  const { relayerWallet, provider, relayerAddress, chainId } = useEnvWallet();
   const [contractAddress, setContractAddress] = useState('');
   const [selectedFunction, setSelectedFunction] = useState<FunctionType>('sendETH');
   const [selectedNetwork, setSelectedNetwork] = useState<number>(chainId || 1);
@@ -435,8 +435,6 @@ export const SweeperPage: React.FC = () => {
     }
   };
 
-  const currentNetwork = NETWORKS.find(n => n.id === (chainId || selectedNetwork));
-
   const isExecuteDisabled = () => {
     if (!relayerWallet || !provider || !contractAddress || !isValidAddress(contractAddress) || txResult.status === 'pending') {
       return true;
@@ -484,7 +482,7 @@ export const SweeperPage: React.FC = () => {
         </div>
 
         {/* Main Form */}
-        <div className="col-span-6 space-y-4">
+        <div className="col-span-9 space-y-4">
           {/* Network Selection */}
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-3">
@@ -575,63 +573,6 @@ export const SweeperPage: React.FC = () => {
               )}
             </div>
           )}
-        </div>
-
-        {/* Sidebar Info */}
-        <div className="col-span-3 space-y-4">
-          {/* Current Network */}
-          <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Globe className="w-4 h-4 text-green-400" />
-              <h3 className="text-sm font-medium text-white">Текущая сеть</h3>
-            </div>
-            <div className="text-sm text-gray-300">
-              {currentNetwork?.name || 'Неизвестно'} ({currentNetwork?.currency || 'ETH'})
-            </div>
-            <div className="text-xs text-gray-500 mt-1">Chain ID: {chainId || selectedNetwork}</div>
-          </div>
-
-          {/* Relayer Info */}
-          {relayerAddress && (
-            <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Zap className="w-4 h-4 text-purple-400" />
-                <h3 className="text-sm font-medium text-white">Релейер</h3>
-              </div>
-              <div className="text-xs text-gray-400 font-mono mb-2">{relayerAddress}</div>
-              {relayerBalance && (
-                <div className="text-xs text-gray-300">
-                  Баланс: {parseFloat(relayerBalance).toFixed(4)} {currentNetwork?.currency || 'ETH'}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Contract Info */}
-          <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-white mb-2">Контракт</h3>
-            {contractAddress ? (
-              <div className="text-xs text-gray-400 font-mono break-all">{contractAddress}</div>
-            ) : (
-              <div className="text-xs text-gray-500">Контракт не выбран</div>
-            )}
-          </div>
-
-          {/* Selected Function */}
-          <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-white mb-2">Функция</h3>
-            <div className="text-xs text-gray-400">
-              {functions.find(f => f.id === selectedFunction)?.name || 'Не выбрано'}
-            </div>
-          </div>
-
-          {/* Refresh Balances */}
-          <button
-            onClick={refreshBalances}
-            className="w-full bg-gray-700 text-white py-2 px-4 rounded text-sm font-medium hover:bg-gray-600 transition-colors"
-          >
-            Обновить балансы
-          </button>
         </div>
       </div>
     </div>
