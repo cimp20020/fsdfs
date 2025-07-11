@@ -60,10 +60,10 @@ export const RelayerPage: React.FC = () => {
       />
       
       {/* Combined Information Block */}
-      <div className="bg-[#111111] border border-gray-800 rounded-lg p-3 pb-2">
+      <div className="bg-[#111111] border border-gray-800 rounded-lg p-6">
         {/* Relayer Address Section */}
         {relayerAddress && (
-          <div className="mb-3">
+          <div className="mb-8">
             <div className="flex items-center gap-3 mb-4">
               <Wallet className="w-5 h-5 text-blue-400" />
               <h2 className="text-lg font-semibold text-white">Адрес релейера</h2>
@@ -71,7 +71,7 @@ export const RelayerPage: React.FC = () => {
             
             <div 
               onClick={() => copyToClipboard(relayerAddress, 'relayer-address')}
-              className="text-white font-mono text-sm bg-[#0a0a0a] border border-gray-700 p-3 rounded cursor-pointer hover:bg-gray-800/50 transition-colors flex items-center justify-between group"
+              className="text-white font-mono text-sm bg-[#0a0a0a] border border-gray-700 p-4 rounded cursor-pointer hover:bg-gray-800/50 transition-colors flex items-center justify-between group"
             >
               <span>{relayerAddress}</span>
               <Copy className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
@@ -80,11 +80,11 @@ export const RelayerPage: React.FC = () => {
         )}
 
         {/* Divider */}
-        <div className="border-t border-gray-700 mb-3"></div>
+        <div className="border-t border-gray-700 mb-8"></div>
 
         {/* Networks Configuration Section */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <Network className="w-5 h-5 text-purple-400" />
               <h2 className="text-lg font-semibold text-white">Конфигурация сетей</h2>
@@ -104,15 +104,15 @@ export const RelayerPage: React.FC = () => {
             </div>
           </div>
           
-          <div className="overflow-x-auto -mx-3">
-            <table className="w-full text-sm min-w-full">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-700">
-                  <th className="text-left py-2 px-3 text-gray-400 font-medium whitespace-nowrap">Сеть</th>
-                  <th className="text-left py-1 px-3 text-gray-400 font-medium whitespace-nowrap">Chain ID</th>
-                  <th className="text-left py-2 px-3 text-gray-400 font-medium whitespace-nowrap">Баланс</th>
-                  <th className="text-left py-2 px-3 text-gray-400 font-medium whitespace-nowrap">Gas Limit</th>
-                  <th className="text-left py-2 px-3 text-gray-400 font-medium whitespace-nowrap">Delegate Address</th>
+                  <th className="text-left py-2 px-3 text-gray-400 font-medium">Сеть</th>
+                  <th className="text-left py-2 px-3 text-gray-400 font-medium">Chain ID</th>
+                  <th className="text-left py-2 px-3 text-gray-400 font-medium">Баланс</th>
+                  <th className="text-left py-2 px-3 text-gray-400 font-medium">Gas Limit</th>
+                  <th className="text-left py-2 px-3 text-gray-400 font-medium">Delegate Address</th>
                 </tr>
               </thead>
               <tbody>
@@ -122,22 +122,22 @@ export const RelayerPage: React.FC = () => {
                     <tr key={network.id} className={`border-b border-gray-800 hover:bg-gray-800/30 transition-colors ${
                       network.id === chainId ? 'bg-[#222225]' : ''
                     }`}>
-                      <td className="py-1.5 px-3">
+                      <td className="py-3 px-3">
                         <div className="font-medium text-white">{network.name}</div>
                       </td>
-                      <td className="py-1.5 px-3 text-gray-300">{network.id}</td>
-                      <td className="py-1.5 px-3">
+                      <td className="py-3 px-3 text-gray-300">{network.id}</td>
+                      <td className="py-3 px-3">
                         {networkBalance ? (
-                          <div className="text-white font-medium whitespace-nowrap">
+                          <div className="text-white font-medium">
                             {parseFloat(networkBalance.balance).toFixed(4)} {networkBalance.currency}
                           </div>
                         ) : (
                           <div className="text-gray-500">—</div>
                         )}
                       </td>
-                      <td className="py-1.5 px-3 text-gray-300 whitespace-nowrap">{network.gasConfig.gasLimit.toLocaleString()}</td>
-                      <td className="py-1.5 px-3">
-                        <div className="font-mono text-xs text-gray-300 break-all min-w-0">
+                      <td className="py-3 px-3 text-gray-300">{network.gasConfig.gasLimit.toLocaleString()}</td>
+                      <td className="py-3 px-3">
+                        <div className="font-mono text-xs text-gray-300 break-all">
                           {network.delegateAddress}
                         </div>
                       </td>
