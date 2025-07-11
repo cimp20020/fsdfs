@@ -51,6 +51,7 @@ export const SweeperPage: React.FC = () => {
     message: '',
   });
   const [simulationResult, setSimulationResult] = useState<any>(null);
+  const [isSimulated, setIsSimulated] = useState(false);
 
   // Sweeper contract ABI
   const sweeperABI = [
@@ -73,6 +74,109 @@ export const SweeperPage: React.FC = () => {
     return ethers.isAddress(address);
   };
 
+  const handleSimulate = async () => {
+    if (!relayerWallet || !provider || !contractAddress) {
+      setTxResult({
+        hash: null,
+        status: 'error',
+        message: 'Конфигурация неполная',
+      });
+      return;
+    }
+
+    try {
+      setTxResult({ hash: null, status: 'pending', message: 'Запуск симуляции...' });
+      setSimulationResult(null);
+      setIsSimulated(false);
+
+      let functionName = '';
+      let params: any[] = [];
+      let value = '0';
+
+      switch (selectedFunction) {
+        case 'sendETH':
+          functionName = 'fallbackETHReceiver';
+          params = [];
+          value = ethAmount;
+          break;
+        case 'sweepETH':
+          functionName = 'sweepETH';
+          params = [ethers.parseEther(ethAmount || '0')];
+          break;
+        case 'sweepTokens':
+          if (!isValidAddress(tokenAddress)) {
+            setTxResult({ hash: null, status: 'error', message: 'Неверный адрес токена' });
+            return;
+          }
+          functionName = 'sweepTokens';
+          params = [tokenAddress];
+          break;
+        case 'executeCall':
+          if (!isValidAddress(callTarget)) {
+            setTxResult({ hash: null, status: 'error', message: 'Неверный целевой адрес' });
+            return;
+          }
+          const dataBytes = callData.startsWith('0x') ? callData : '0x' + callData;
+          functionName = 'executeCall';
+          params = [callTarget, dataBytes];
+          value = ethAmount;
+          break;
+        default:
+          setTxResult({ hash: null, status: 'error', message: 'Неподдерживаемая функция' });
+          return;
+      }
+
+      // Симуляция с Tenderly
+      if (tenderlySimulator.isEnabled()) {
+        const contract = new ethers.Contract(contractAddress, sweeperABI, relayerWallet);
+        const functionData = contract.interface.encodeFunctionData(functionName, params);
+        
+        const network = await provider.getNetwork();
+        const simulationResult = await tenderlySimulator.simulateContractCall(
+          Number(network.chainId),
+          relayerAddress!,
+          contractAddress,
+          functionData,
+          ethers.parseEther(value).toString(),
+          200000
+        );
+        
+        setSimulationResult(simulationResult);
+        setIsSimulated(true);
+        
+        if (simulationResult.success) {
+          setTxResult({
+            hash: null,
+            status: 'success',
+            message: 'Симуляция прошла успешно. Можно отправить транзакцию.',
+            simulationUrl: simulationResult.simulationUrl,
+          });
+        } else {
+          setTxResult({
+            hash: null,
+            status: 'error',
+            message: `Симуляция не прошла: ${simulationResult.error}`,
+            simulationUrl: simulationResult.simulationUrl,
+          });
+        }
+      } else {
+        setTxResult({
+          hash: null,
+          status: 'error',
+          message: 'Tenderly не настроен. Симуляция недоступна.',
+        });
+      }
+
+    } catch (error) {
+      console.error('Simulation failed:', error);
+      setTxResult({
+        hash: null,
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Ошибка симуляции',
+      });
+    }
+  };
+
   const executeContractFunction = async (functionName: string, params: any[] = [], value: string = '0') => {
     if (!relayerWallet || !provider || !contractAddress) {
       setTxResult({
@@ -84,52 +188,7 @@ export const SweeperPage: React.FC = () => {
     }
 
     try {
-      setTxResult({ hash: null, status: 'pending', message: `Симуляция ${functionName}...` });
-      setSimulationResult(null);
-
-      // Обязательная симуляция с Tenderly
-      let simulationResult = null;
-      if (tenderlySimulator.isEnabled()) {
-        const contract = new ethers.Contract(contractAddress, sweeperABI, relayerWallet);
-        const functionData = contract.interface.encodeFunctionData(functionName, params);
-        
-        const network = await provider.getNetwork();
-        simulationResult = await tenderlySimulator.simulateContractCall(
-          Number(network.chainId),
-          relayerAddress!,
-          contractAddress,
-          functionData,
-          ethers.parseEther(value).toString(),
-          200000
-        );
-        
-        setSimulationResult(simulationResult);
-        
-        // Если симуляция не прошла, не выполняем транзакцию
-        if (!simulationResult.success) {
-          setTxResult({
-            hash: null,
-            status: 'error',
-            message: `Симуляция не прошла: ${simulationResult.error}`,
-            simulationUrl: simulationResult.simulationUrl,
-          });
-          return;
-        }
-        
-        setTxResult({ 
-          hash: null, 
-          status: 'pending', 
-          message: `Симуляция успешна. Выполнение ${functionName}...`,
-          simulationUrl: simulationResult.simulationUrl,
-        });
-      } else {
-        setTxResult({
-          hash: null,
-          status: 'error',
-          message: 'Tenderly не настроен. Симуляция недоступна.',
-        });
-        return;
-      }
+      setTxResult({ hash: null, status: 'pending', message: `Выполнение ${functionName}...` });
 
       const contract = new ethers.Contract(contractAddress, sweeperABI, relayerWallet);
       const tx = await contract[functionName](...params, {
@@ -141,7 +200,6 @@ export const SweeperPage: React.FC = () => {
         hash: tx.hash,
         status: 'success',
         message: `${functionName} выполнен успешно`,
-        simulationUrl: simulationResult?.simulationUrl,
       });
 
     } catch (error) {
@@ -155,6 +213,15 @@ export const SweeperPage: React.FC = () => {
   };
 
   const handleExecute = () => {
+    if (!isSimulated || !simulationResult?.success) {
+      setTxResult({
+        hash: null,
+        status: 'error',
+        message: 'Сначала выполните успешную симуляцию',
+      });
+      return;
+    }
+
     switch (selectedFunction) {
       case 'sendETH':
         executeContractFunction('fallbackETHReceiver', [], ethAmount);
@@ -274,6 +341,12 @@ export const SweeperPage: React.FC = () => {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
+  };
+
+  const resetSimulation = () => {
+    setSimulationResult(null);
+    setIsSimulated(false);
+    setTxResult({ hash: null, status: 'idle', message: '' });
   };
 
   const getStatusIcon = () => {
@@ -464,7 +537,7 @@ export const SweeperPage: React.FC = () => {
     }
   };
 
-  const isExecuteDisabled = () => {
+  const isSimulateDisabled = () => {
     if (!relayerWallet || !provider || !contractAddress || !isValidAddress(contractAddress) || txResult.status === 'pending') {
       return true;
     }
@@ -479,6 +552,10 @@ export const SweeperPage: React.FC = () => {
       default:
         return false;
     }
+  };
+
+  const isExecuteDisabled = () => {
+    return !isSimulated || !simulationResult?.success || txResult.status === 'pending';
   };
 
   return (
@@ -552,24 +629,55 @@ export const SweeperPage: React.FC = () => {
             {renderFunctionInputs()}
           </div>
 
-          {/* Execute Button */}
-          <button
-            onClick={handleExecute}
-            disabled={isExecuteDisabled()}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {txResult.status === 'pending' ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Выполнение...
-              </>
+          {/* Action Buttons */}
+          <div className="space-y-2">
+            {!isSimulated ? (
+              <button
+                onClick={handleSimulate}
+                disabled={isSimulateDisabled()}
+                className="w-full bg-purple-600 text-white py-2 px-4 rounded text-sm font-medium hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {txResult.status === 'pending' ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Симуляция...
+                  </>
+                ) : (
+                  <>
+                    <Target className="w-4 h-4" />
+                    Симулировать
+                  </>
+                )}
+              </button>
             ) : (
-              <>
-                <Send className="w-4 h-4" />
-                Выполнить
-              </>
+              <div className="space-y-2">
+                <button
+                  onClick={handleExecute}
+                  disabled={isExecuteDisabled()}
+                  className="w-full bg-green-600 text-white py-2 px-4 rounded text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {txResult.status === 'pending' && txResult.message.includes('Выполнение') ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Отправка...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      Отправить транзакцию
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={resetSimulation}
+                  className="w-full bg-gray-600 text-white py-2 px-4 rounded text-sm font-medium hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Target className="w-4 h-4" />
+                  Новая симуляция
+                </button>
+              </div>
             )}
-          </button>
+          </div>
 
           {/* Transaction Status */}
           {txResult.message && (
