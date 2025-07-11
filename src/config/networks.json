@@ -12,7 +12,6 @@
         "maxFeePerGas": "5000000000",
         "maxPriorityFeePerGas": "1000000000",
         "authorizationGasLimit": 300000
-        "authorizationGasLimit": 300000
       },
       "relayerKeyEnv": "VITE_RELAYER_PRIVATE_KEY"
     }
