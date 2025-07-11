@@ -20,7 +20,7 @@
       "currency": "BNB",
       "rpcUrl": "https://bsc-dataseed1.binance.org",
       "explorerUrl": "https://bscscan.com",
-      "delegateAddress": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
+      "delegateAddress": "0x4351D1bEC873130a0217be62646C9CE73C814720",
       "gasConfig": {
         "gasLimit": 200000,
         "maxFeePerGas": "5000000000",
@@ -34,7 +34,7 @@
       "currency": "MATIC",
       "rpcUrl": "https://polygon-rpc.com",
       "explorerUrl": "https://polygonscan.com",
-      "delegateAddress": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
+      "delegateAddress": "0x4351D1bEC873130a0217be62646C9CE73C814720",
       "gasConfig": {
         "gasLimit": 200000,
         "maxFeePerGas": "50000000000",
@@ -48,7 +48,7 @@
       "currency": "ETH",
       "rpcUrl": "https://arb1.arbitrum.io/rpc",
       "explorerUrl": "https://arbiscan.io",
-      "delegateAddress": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
+      "delegateAddress": "0x4351D1bEC873130a0217be62646C9CE73C814720",
       "gasConfig": {
         "gasLimit": 200000,
         "maxFeePerGas": "100000000",
@@ -62,7 +62,7 @@
       "currency": "ETH",
       "rpcUrl": "https://mainnet.optimism.io",
       "explorerUrl": "https://optimistic.etherscan.io",
-      "delegateAddress": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
+      "delegateAddress": "0x4351D1bEC873130a0217be62646C9CE73C814720",
       "gasConfig": {
         "gasLimit": 200000,
         "maxFeePerGas": "100000000",
@@ -76,7 +76,7 @@
       "currency": "ETH",
       "rpcUrl": "https://mainnet.base.org",
       "explorerUrl": "https://basescan.org",
-      "delegateAddress": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
+      "delegateAddress": "0x4351D1bEC873130a0217be62646C9CE73C814720",
       "gasConfig": {
         "gasLimit": 200000,
         "maxFeePerGas": "100000000",
