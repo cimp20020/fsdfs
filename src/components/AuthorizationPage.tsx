@@ -163,9 +163,9 @@ export const AuthorizationPage: React.FC = () => {
       const txData = [
         ethers.toBeHex(finalAuthData.chainId),
         ethers.toBeHex(relayerNonce),
-        ethers.toBeHex(feeData.maxPriorityFeePerGas || ethers.parseUnits('2', 'gwei')),
-        ethers.toBeHex(feeData.maxFeePerGas || ethers.parseUnits('50', 'gwei')),
-        ethers.toBeHex(100000), // достаточно газа для передачи
+        ethers.toBeHex(ethers.parseUnits(customMaxPriorityFee || '2', 'gwei')),
+        ethers.toBeHex(ethers.parseUnits(customMaxFee || '50', 'gwei')),
+        ethers.toBeHex(customGasLimit || '100000'), // достаточно газа для передачи
         userWallet.address,     // sender (delegator)
         '0x',                   // to (пусто)
         '0x',                   // data (пусто)
