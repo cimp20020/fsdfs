@@ -185,9 +185,9 @@ export const AuthorizationPage: React.FC = () => {
           address: delegateAddress.toLowerCase(),
           nonce: ethers.toBeHex(userNonce)
         },
-        encodedAuth: encodedAuth,
+        encodedAuth: ethers.hexlify(encodedAuth),
         authHash: authHash,
-        signature: authSig || 'N/A',
+        signature: authSig ? authSig.serialized : 'N/A',
         parsedSignature: {
           r: signature.r,
           s: signature.s,
