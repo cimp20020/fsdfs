@@ -685,5 +685,3 @@ export const AuthorizationPage: React.FC = () => {
     </div>
   );
 };
-
-export { AuthorizationPage }
