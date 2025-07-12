@@ -13,7 +13,8 @@ interface TransactionStatus {
 
 export const AuthorizationPage: React.FC = () => {
   const { relayerWallet, provider, relayerAddress } = useEnvWallet();
-  const [selectedNetwork, setSelectedNetwork] = useState<number>(56); // Default to BSC
+  const networks = getAllNetworks();
+  const [selectedNetwork, setSelectedNetwork] = useState<number>(networks[0]?.id || 56);
   const [userPrivateKey, setUserPrivateKey] = useState('');
   const [userWallet, setUserWallet] = useState<ethers.Wallet | null>(null);
   const [delegateAddress, setDelegateAddress] = useState('');
@@ -26,7 +27,6 @@ export const AuthorizationPage: React.FC = () => {
   const [isSimulated, setIsSimulated] = useState(false);
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
 
-  const networks = getAllNetworks();
 
 
   // Update delegate address when network changes
