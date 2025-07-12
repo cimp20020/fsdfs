@@ -179,7 +179,18 @@ export const AuthorizationPage: React.FC = () => {
       // 1. Получаем данные сети
       const userNonce = await provider.getTransactionCount(userWallet.address);
       const network = await provider.getNetwork();
+      
+      // Проверяем что сеть получена корректно
+      if (!network || !network.chainId) {
+        throw new Error(`Не удалось получить данные сети. Используйте выбранную сеть: ${selectedNetwork}`);
+      }
+      
       const chainId = Number(network.chainId);
+      
+      // Дополнительная проверка chainId
+      if (!chainId || chainId === 0) {
+        throw new Error(`Неверный chainId: ${chainId}. Проверьте подключение к сети.`);
+      }
 
       console.log(`Chain ID: ${chainId}, User Nonce: ${userNonce}`);
 
