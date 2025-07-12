@@ -10,7 +10,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState<Page>('authorization');
 
   const pages = [
-    { id: 'authorization' as Page, name: 'EIP-7702 Авторизация', icon: Shield },
+    { id: 'authorization' as Page, name: 'Авторизация', icon: Shield },
     { id: 'sweeper' as Page, name: 'Управление Контрактами', icon: Wrench },
     { id: 'relayer' as Page, name: 'Мониторинг Релейера', icon: Server },
   ];
