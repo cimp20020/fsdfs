@@ -22,6 +22,8 @@ export const AuthorizationPage: React.FC = () => {
     status: 'idle',
     message: '',
   });
+  const [simulationResult, setSimulationResult] = useState<any>(null);
+  const [isSimulated, setIsSimulated] = useState(false);
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
 
   const networks = getAllNetworks();
@@ -67,7 +69,7 @@ export const AuthorizationPage: React.FC = () => {
   };
 
 
-  const handlePrepareAuthorization = async () => {
+  const handleSimulate = async () => {
     if (!relayerWallet || !provider || !userWallet) {
       setTxStatus({
         hash: null,
@@ -87,7 +89,7 @@ export const AuthorizationPage: React.FC = () => {
     }
 
     try {
-      setTxStatus({ hash: null, status: 'pending', message: 'Подготовка авторизации...' });
+      setTxStatus({ hash: null, status: 'pending', message: 'Симуляция авторизации...' });
 
       console.log(`UserEOA: ${userWallet.address}`);
       console.log(`Relayer: ${relayerAddress}`);
@@ -198,18 +200,54 @@ export const AuthorizationPage: React.FC = () => {
       // Сохраняем подписанную транзакцию для отправки
       (window as any).signedTransaction = signedTx;
 
-      setTxStatus({
-        hash: null,
-        status: 'success',
-        message: 'Авторизация подготовлена успешно. Можно отправить транзакцию.',
-      });
+      // Симуляция с Tenderly
+      if (tenderlySimulator.isEnabled()) {
+        console.log('🔍 Simulating EIP-7702 authorization with Tenderly...');
+        
+        const simulationResult = await tenderlySimulator.simulateEIP7702Authorization(
+          chainId,
+          userWallet.address,
+          delegateAddress,
+          relayerAddress!,
+          finalAuthData,
+          getNetworkAuthorizationGasLimit(chainId)
+        );
+        
+        setSimulationResult(simulationResult);
+        setIsSimulated(true);
+        
+        if (simulationResult.success) {
+          setTxStatus({
+            hash: null,
+            status: 'success',
+            message: 'Симуляция авторизации прошла успешно. Можно отправить транзакцию.',
+            simulationUrl: simulationResult.simulationUrl,
+          });
+        } else {
+          setTxStatus({
+            hash: null,
+            status: 'error',
+            message: `Симуляция авторизации не прошла: ${simulationResult.error}`,
+            simulationUrl: simulationResult.simulationUrl,
+          });
+        }
+      } else {
+        // Если Tenderly не настроен, считаем симуляцию успешной
+        setSimulationResult({ success: true });
+        setIsSimulated(true);
+        setTxStatus({
+          hash: null,
+          status: 'success',
+          message: 'Авторизация подготовлена успешно. Можно отправить транзакцию.',
+        });
+      }
 
     } catch (error) {
-      console.error('Authorization preparation failed:', error);
+      console.error('Authorization simulation failed:', error);
       setTxStatus({
         hash: null,
         status: 'error',
-        message: error instanceof Error ? error.message : 'Ошибка подготовки авторизации',
+        message: error instanceof Error ? error.message : 'Ошибка симуляции авторизации',
       });
     }
   };
@@ -229,7 +267,7 @@ export const AuthorizationPage: React.FC = () => {
       setTxStatus({
         hash: null,
         status: 'error',
-        message: 'Сначала подготовьте авторизацию',
+        message: 'Сначала выполните симуляцию',
       });
       return;
     }
@@ -256,6 +294,12 @@ export const AuthorizationPage: React.FC = () => {
         message: error instanceof Error ? error.message : 'Ошибка отправки транзакции',
       });
     }
+  };
+
+  const resetSimulation = () => {
+    setSimulationResult(null);
+    setIsSimulated(false);
+    setTxStatus({ hash: null, status: 'idle', message: '' });
   };
 
   const copyToClipboard = async (text: string, itemId: string) => {
@@ -294,13 +338,12 @@ export const AuthorizationPage: React.FC = () => {
     }
   };
 
-  const isPrepareDisabled = () => {
+  const isSimulateDisabled = () => {
     return !relayerWallet || !provider || !userWallet || !isValidAddress(delegateAddress) || txStatus.status === 'pending';
   };
 
-  const isSendDisabled = () => {
-    const hasSignedTx = !!(window as any).signedTransaction;
-    return !hasSignedTx || txStatus.status === 'pending';
+  const isExecuteDisabled = () => {
+    return !isSimulated || !simulationResult?.success || txStatus.status === 'pending';
   };
 
   const CopyNotification = ({ show, text }: { show: boolean; text: string }) => (
@@ -400,41 +443,52 @@ export const AuthorizationPage: React.FC = () => {
 
           {/* Action Buttons */}
           <div className="space-y-2">
+            {!isSimulated ? (
               <button
-                onClick={handlePrepareAuthorization}
-                disabled={isPrepareDisabled()}
+                onClick={handleSimulate}
+                disabled={isSimulateDisabled()}
                 className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                {txStatus.status === 'pending' && txStatus.message.includes('Подготовка') ? (
+                {txStatus.status === 'pending' ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Подготовка...
+                    Симуляция...
                   </>
                 ) : (
                   <>
                     <Target className="w-4 h-4" />
-                    Подготовить авторизацию
+                    Симулировать авторизацию
                   </>
                 )}
               </button>
-
-            <button
-              onClick={handleSendTransaction}
-              disabled={isSendDisabled()}
-              className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {txStatus.status === 'pending' && txStatus.message.includes('Отправка') ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Отправка...
-                </>
-              ) : (
-                <>
-                  <Send className="w-4 h-4" />
-                  Отправить авторизацию
-                </>
-              )}
-            </button>
+            ) : (
+              <div className="space-y-2">
+                <button
+                  onClick={handleSendTransaction}
+                  disabled={isExecuteDisabled()}
+                  className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {txStatus.status === 'pending' && txStatus.message.includes('Отправка') ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Отправка...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      Отправить авторизацию
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={resetSimulation}
+                  className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors flex items-center justify-center gap-2"
+                >
+                  <Target className="w-4 h-4" />
+                  Новая симуляция
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Transaction Status */}
@@ -470,9 +524,9 @@ export const AuthorizationPage: React.FC = () => {
                   })()}
                 </div>
               )}
-              {txStatus.simulationUrl && (
+              {(txStatus.simulationUrl || simulationResult?.simulationUrl) && (
                 <a
-                  href={txStatus.simulationUrl}
+                  href={txStatus.simulationUrl || simulationResult?.simulationUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs mt-2"
