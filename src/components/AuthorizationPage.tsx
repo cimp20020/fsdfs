@@ -441,6 +441,47 @@ export const AuthorizationPage: React.FC = () => {
             )}
           </div>
 
+
+        {/* Gas Configuration */}
+<div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
+  <div className="flex items-center gap-2 mb-3">
+    <Coins className="w-4 h-4 text-gray-400" />
+    <h3 className="text-sm font-medium text-white">Конфигурация газа</h3>
+  </div>
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+    <div>
+      <label className="text-xs text-gray-400">Gas Limit</label>
+      <input
+        type="number"
+        value={customGasLimit}
+        onChange={(e) => setCustomGasLimit(e.target.value)}
+        className="w-full bg-[#0a0a0a] border border-gray-700 rounded px-3 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
+        placeholder="100000"
+      />
+    </div>
+    <div>
+      <label className="text-xs text-gray-400">Max Fee (GWEI)</label>
+      <input
+        type="number"
+        value={customMaxFee}
+        onChange={(e) => setCustomMaxFee(e.target.value)}
+        className="w-full bg-[#0a0a0a] border border-gray-700 rounded px-3 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
+        placeholder="50"
+      />
+    </div>
+    <div>
+      <label className="text-xs text-gray-400">Max Priority Fee (GWEI)</label>
+      <input
+        type="number"
+        value={customMaxPriorityFee}
+        onChange={(e) => setCustomMaxPriorityFee(e.target.value)}
+        className="w-full bg-[#0a0a0a] border border-gray-700 rounded px-3 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
+        placeholder="2"
+      />
+    </div>
+  </div>
+</div>
+
           {/* Action Buttons */}
           <div className="space-y-2">
             {!isSimulated ? (
