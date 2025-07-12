@@ -14,6 +14,21 @@
         "authorizationGasLimit": 300000
       },
       "relayerKeyEnv": "VITE_RELAYER_PRIVATE_KEY"
+    },
+    {
+      "id": 137,
+      "name": "POLYGON",
+      "currency": "MAITC",
+      "rpcUrl": "https://polygon-bor-rpc.publicnode.com",
+      "explorerUrl": "https://polygonscan.com/",
+      "delegateAddress": "0x93c1bfc95c20d212c85c6bbc74bd339b3c0086da",
+      "gasConfig": {
+        "gasLimit": 200000,
+        "maxFeePerGas": "5000000000",
+        "maxPriorityFeePerGas": "1000000000",
+        "authorizationGasLimit": 300000
+      },
+      "relayerKeyEnv": "VITE_RELAYER_PRIVATE_KEY"
     }
   ]
 }
