@@ -299,16 +299,17 @@ export const AuthorizationPage: React.FC = () => {
       const relayerNonce = await provider.getTransactionCount(relayerAddress!);
       const feeData = await provider.getFeeData();
 
+      // EIP-7702 transaction structure: [chainId, nonce, maxPriorityFeePerGas, maxFeePerGas, gasLimit, to, value, data, accessList, authorizationList]
       let txData = [
         ethers.toBeHex(finalAuthData.chainId),
         ethers.toBeHex(relayerNonce),
         ethers.toBeHex(feeData.maxPriorityFeePerGas || ethers.parseUnits('2', 'gwei')),
         ethers.toBeHex(feeData.maxFeePerGas || ethers.parseUnits('50', 'gwei')),
-        ethers.toBeHex(100000), // достаточно газа для передачи
-        userWallet.address,     // sender (delegator)
-        '0x',                   // to (пусто)
-        '0x',                   // data (пусто)
-        [],                     // accessList
+        ethers.toBeHex(100000), // gasLimit
+        userWallet.address,     // to (delegator address)
+        ethers.toBeHex(0),      // value (default 0)
+        '0x',                   // data (default empty)
+        [],                     // accessList (empty)
         [[
           ethers.toBeHex(finalAuthData.chainId),
           finalAuthData.address,
@@ -325,13 +326,9 @@ export const AuthorizationPage: React.FC = () => {
         if (functionData) {
           // Update transaction with function call data
           txData[5] = delegateAddress; // to address (delegate contract)
-          txData[6] = functionData.data; // function call data
+          txData[6] = ethers.toBeHex(functionData.value || 0); // value
+          txData[7] = functionData.data; // function call data
           txData[4] = ethers.toBeHex(functionData.gasLimit); // update gas limit
-          
-          if (functionData.value && functionData.value !== '0') {
-            // For payable functions, we need to handle value differently
-            // This is a simplified approach - in practice, you might need more complex handling
-          }
         }
       }
 
