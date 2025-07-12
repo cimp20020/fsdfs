@@ -3,7 +3,7 @@ import { Send, ArrowUpRight, Coins, Target, Loader2, CheckCircle, AlertCircle, E
 import { ethers } from 'ethers';
 import { useEnvWallet } from '../hooks/useEnvWallet';
 import { tenderlySimulator } from '../utils/tenderly';
-import { getAllNetworks, getNetworkById, getTransactionUrl, getNetworkGasConfig } from '../config/networkConfig';
+import { getAllNetworks, getNetworkById, getTransactionUrl, getNetworkGasConfig, getNetworkRpcUrl, getNetworkRelayerKey } from '../config/networkConfig';
 
 interface TransactionResult {
   hash: string | null;
@@ -30,7 +30,7 @@ interface SequenceOperation {
 type FunctionType = 'sendETH' | 'sweepETH' | 'sweepTokens' | 'executeCall' | 'customSequence';
 
 export const SweeperPage: React.FC = () => {
-  const { relayerWallet, provider, relayerAddress, chainId } = useEnvWallet();
+  const { chainId } = useEnvWallet();
   const [contractAddress, setContractAddress] = useState('');
   const [selectedFunction, setSelectedFunction] = useState<FunctionType>('sendETH');
   const [selectedNetwork, setSelectedNetwork] = useState<number>(chainId || 1);
@@ -49,6 +49,26 @@ export const SweeperPage: React.FC = () => {
   const [simulationResult, setSimulationResult] = useState<any>(null);
   const [isSimulated, setIsSimulated] = useState(false);
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
+
+  // Create provider and wallet for selected network
+  const getNetworkProvider = () => {
+    const network = getNetworkById(selectedNetwork);
+    if (!network) return null;
+    return new ethers.JsonRpcProvider(network.rpcUrl);
+  };
+
+  const getNetworkRelayerWallet = () => {
+    const network = getNetworkById(selectedNetwork);
+    if (!network) return null;
+    
+    const relayerKey = getNetworkRelayerKey(selectedNetwork);
+    if (!relayerKey) return null;
+    
+    const provider = getNetworkProvider();
+    if (!provider) return null;
+    
+    return new ethers.Wallet(relayerKey, provider);
+  };
 
   const networks = getAllNetworks();
 
@@ -74,17 +94,20 @@ export const SweeperPage: React.FC = () => {
   };
 
   const handleSimulate = async () => {
-    if (selectedFunction === 'customSequence') {
-      await simulateFullSequence();
-      return;
-    }
-
+    const provider = getNetworkProvider();
+    const relayerWallet = getNetworkRelayerWallet();
+    
     if (!relayerWallet || !provider || !contractAddress) {
       setTxResult({
         hash: null,
         status: 'error',
         message: 'Конфигурация неполная',
       });
+      return;
+    }
+
+    if (selectedFunction === 'customSequence') {
+      await simulateFullSequence();
       return;
     }
 
@@ -138,7 +161,7 @@ export const SweeperPage: React.FC = () => {
         const network = await provider.getNetwork();
         const simulationResult = await tenderlySimulator.simulateContractCall(
           Number(network.chainId),
-          relayerAddress!,
+          relayerWallet.address,
           contractAddress,
           functionData,
           ethers.parseEther(value).toString(),
@@ -182,6 +205,9 @@ export const SweeperPage: React.FC = () => {
   };
 
   const executeContractFunction = async (functionName: string, params: any[] = [], value: string = '0') => {
+    const provider = getNetworkProvider();
+    const relayerWallet = getNetworkRelayerWallet();
+    
     if (!relayerWallet || !provider || !contractAddress) {
       setTxResult({
         hash: null,
@@ -197,7 +223,7 @@ export const SweeperPage: React.FC = () => {
       const contract = new ethers.Contract(contractAddress, sweeperABI, relayerWallet);
       const tx = await contract[functionName](...params, {
         value: ethers.parseEther(value),
-        gasLimit: getNetworkGasConfig(chainId || selectedNetwork)?.gasLimit || 200000,
+        gasLimit: getNetworkGasConfig(selectedNetwork)?.gasLimit || 200000,
       });
 
       setTxResult({
@@ -255,6 +281,9 @@ export const SweeperPage: React.FC = () => {
   };
 
   const executeCustomSequence = async () => {
+    const provider = getNetworkProvider();
+    const relayerWallet = getNetworkRelayerWallet();
+    
     const enabledOperations = sequenceOperations.filter(op => op.enabled);
     if (!relayerWallet || !provider || !contractAddress || enabledOperations.length === 0) {
       setTxResult({ hash: null, status: 'error', message: 'Неверная конфигурация последовательности' });
@@ -304,7 +333,7 @@ export const SweeperPage: React.FC = () => {
 
       const tx = await contract.multicall(targets, datas, {
         value: totalValue,
-        gasLimit: (getNetworkGasConfig(chainId || selectedNetwork)?.gasLimit || 200000) + 100000,
+        gasLimit: (getNetworkGasConfig(selectedNetwork)?.gasLimit || 200000) + 100000,
       });
 
       setTxResult({
@@ -405,6 +434,9 @@ export const SweeperPage: React.FC = () => {
   };
 
   const simulateOperation = async (operationId: string) => {
+    const provider = getNetworkProvider();
+    const relayerWallet = getNetworkRelayerWallet();
+    
     const operation = sequenceOperations.find(op => op.id === operationId);
     if (!operation || !relayerWallet || !provider || !contractAddress) return;
 
@@ -455,7 +487,7 @@ export const SweeperPage: React.FC = () => {
         const network = await provider.getNetwork();
         const simulationResult = await tenderlySimulator.simulateContractCall(
           Number(network.chainId),
-          relayerAddress!,
+          relayerWallet.address,
           contractAddress,
           functionData,
           ethers.parseEther(value).toString(),
@@ -509,6 +541,9 @@ export const SweeperPage: React.FC = () => {
   };
 
   const simulateFullSequence = async () => {
+    const provider = getNetworkProvider();
+    const relayerWallet = getNetworkRelayerWallet();
+    
     if (!relayerWallet || !provider || !contractAddress) return;
 
     const enabledOperations = sequenceOperations.filter(op => op.enabled);
@@ -561,11 +596,11 @@ export const SweeperPage: React.FC = () => {
         const network = await provider.getNetwork();
         const simulationResult = await tenderlySimulator.simulateContractCall(
           Number(network.chainId),
-          relayerAddress!,
+          relayerWallet.address,
           contractAddress,
           multicallData,
           totalValue.toString(),
-          (getNetworkGasConfig(chainId || selectedNetwork)?.gasLimit || 200000) + 100000
+          (getNetworkGasConfig(selectedNetwork)?.gasLimit || 200000) + 100000
         );
         
         setSimulationResult(simulationResult);
@@ -863,6 +898,9 @@ export const SweeperPage: React.FC = () => {
   };
 
   const isSimulateDisabled = () => {
+    const provider = getNetworkProvider();
+    const relayerWallet = getNetworkRelayerWallet();
+    
     if (!relayerWallet || !provider || !contractAddress || !isValidAddress(contractAddress) || txResult.status === 'pending') {
       return true;
     }
@@ -1042,7 +1080,7 @@ export const SweeperPage: React.FC = () => {
                     <Copy className="w-3 h-3" />
                   </button>
                   {(() => {
-                    const txUrl = getTransactionUrl(txResult.hash, chainId || selectedNetwork);
+                    const txUrl = getTransactionUrl(txResult.hash, selectedNetwork);
                     return txUrl ? (
                       <a
                         href={txUrl}
