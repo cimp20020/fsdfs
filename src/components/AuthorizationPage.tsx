@@ -288,7 +288,7 @@ export const AuthorizationPage: React.FC = () => {
         chainId: authData.chainId,
         address: authData.address,
         nonce: authData.nonce,
-        yParity: authSig.yParity === 0 ? '0x' : '0x01',
+        yParity: ethers.toBeHex(authSig.yParity),
         r: authSig.r,
         s: authSig.s
       };
@@ -341,7 +341,7 @@ export const AuthorizationPage: React.FC = () => {
         '0x04',
         ethers.encodeRlp([
           ...txData,
-          relayerSig.yParity === 0 ? '0x' : '0x01',
+          ethers.toBeHex(relayerSig.yParity),
           relayerSig.r,
           relayerSig.s
         ])
