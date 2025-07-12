@@ -162,7 +162,7 @@ export class TenderlySimulator {
         to,
         input: data,
         gas: gasLimit,
-        gas_price: '1000000000', // 1 gwei
+        gas_price: '100000000000', // 100 gwei
         value,
         save: true,
         save_if_fails: true,
