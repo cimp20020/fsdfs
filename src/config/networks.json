@@ -20,7 +20,7 @@
       "name": "POLYGON",
       "currency": "MAITC",
       "rpcUrl": "https://polygon-bor-rpc.publicnode.com",
-      "explorerUrl": "https://polygonscan.com/",
+      "explorerUrl": "https://polygonscan.com",
       "delegateAddress": "0x93c1bfc95c20d212c85c6bbc74bd339b3c0086da",
       "gasConfig": {
         "gasLimit": 200000,
