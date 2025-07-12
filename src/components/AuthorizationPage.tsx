@@ -3,7 +3,7 @@ import { Shield, Send, Target, Loader2, CheckCircle, AlertCircle, ExternalLink, 
 import { ethers } from 'ethers';
 import { useEnvWallet } from '../hooks/useEnvWallet';
 import { tenderlySimulator, formatSimulationResult } from '../utils/tenderly';
-import { getAllNetworks, getNetworkById, getTransactionUrl, getNetworkGasConfig } from '../config/networkConfig';
+import { getAllNetworks, getNetworkById, getTransactionUrl, getNetworkGasConfig, getNetworkAuthorizationGasLimit } from '../config/networkConfig';
 
 interface TransactionStatus {
   hash: string | null;
