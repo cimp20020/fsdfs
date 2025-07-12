@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Shield, Send, Target, Loader2, CheckCircle, AlertCircle, ExternalLink, Copy, Globe, Key, User, ArrowUpRight, Coins, Plus, Trash2 } from 'lucide-react';
 import { ethers } from 'ethers';
 import { useEnvWallet } from '../hooks/useEnvWallet';
-import { tenderlySimulator } from '../utils/tenderly';
+import { tenderlySimulator, formatSimulationResult } from '../utils/tenderly';
 import { getAllNetworks, getNetworkById, getTransactionUrl, getNetworkGasConfig } from '../config/networkConfig';
 
 interface TransactionStatus {
@@ -29,31 +29,6 @@ interface SequenceOperation {
 
 type FunctionType = 'authorization' | 'sendETH' | 'sweepETH' | 'sweepTokens' | 'executeCall' | 'customSequence';
 
-interface AuthorizationData {
-  chainId: number;
-  address: string;
-  nonce: string;
-  yParity: string;
-  r: string;
-  s: string;
-}
-
-interface AuthorizationDetails {
-  userAddress: string;
-  delegateAddress: string;
-  userNonce: number;
-  chainId: number;
-  encodedAuth: string;
-  authHash: string;
-  signature: {
-    r: string;
-    s: string;
-    yParity: number;
-  };
-  authData: AuthorizationData;
-  signedTransaction: string;
-}
-
 export const AuthorizationPage: React.FC = () => {
   const { relayerWallet, provider, relayerAddress } = useEnvWallet();
   const [selectedNetwork, setSelectedNetwork] = useState<number>(56); // Default to BSC
@@ -61,7 +36,6 @@ export const AuthorizationPage: React.FC = () => {
   const [userWallet, setUserWallet] = useState<ethers.Wallet | null>(null);
   const [delegateAddress, setDelegateAddress] = useState('');
   const [selectedFunction, setSelectedFunction] = useState<FunctionType>('authorization');
-  const [recipientAddress, setRecipientAddress] = useState('');
   const [tokenAddress, setTokenAddress] = useState('');
   const [callTarget, setCallTarget] = useState('');
   const [callData, setCallData] = useState('');
@@ -75,7 +49,6 @@ export const AuthorizationPage: React.FC = () => {
   });
   const [simulationResult, setSimulationResult] = useState<any>(null);
   const [isSimulated, setIsSimulated] = useState(false);
-  const [authorizationDetails, setAuthorizationDetails] = useState<AuthorizationDetails | null>(null);
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
 
   const networks = getAllNetworks();
@@ -137,7 +110,92 @@ export const AuthorizationPage: React.FC = () => {
     return /^[0-9a-fA-F]{64}$/.test(cleanKey);
   };
 
-  const handlePrepareAuthorization = async (includeFunction: boolean = false) => {
+  const handleSimulate = async () => {
+    if (selectedFunction === 'authorization') {
+      setTxStatus({
+        hash: null,
+        status: 'error',
+        message: 'Симуляция недоступна для простой авторизации',
+      });
+      return;
+    }
+
+    if (selectedFunction === 'customSequence') {
+      await simulateFullSequence();
+      return;
+    }
+
+    if (!relayerWallet || !provider || !userWallet || !delegateAddress) {
+      setTxStatus({
+        hash: null,
+        status: 'error',
+        message: 'Конфигурация неполная',
+      });
+      return;
+    }
+
+    try {
+      setTxStatus({ hash: null, status: 'pending', message: 'Запуск симуляции...' });
+      setSimulationResult(null);
+      setIsSimulated(false);
+
+      const validationError = validateFunctionParameters();
+      if (validationError) {
+        setTxStatus({ hash: null, status: 'error', message: validationError });
+        return;
+      }
+
+      // Prepare function data
+      const functionData = await prepareFunctionData();
+      if (!functionData) {
+        setTxStatus({ hash: null, status: 'error', message: 'Не удалось подготовить данные функции' });
+        return;
+      }
+
+      // Simulate with Tenderly
+      if (tenderlySimulator.isEnabled()) {
+        const network = await provider.getNetwork();
+        const chainId = Number(network.chainId);
+        
+        const simulationResult = await tenderlySimulator.simulateContractCall(
+          chainId,
+          relayerAddress!,
+          delegateAddress,
+          functionData.data,
+          functionData.value || '0',
+          functionData.gasLimit
+        );
+        
+        setSimulationResult(simulationResult);
+        setIsSimulated(true);
+        
+        const formattedResult = formatSimulationResult(simulationResult);
+        
+        setTxStatus({
+          hash: null,
+          status: simulationResult.success ? 'success' : 'error',
+          message: formattedResult.message,
+          simulationUrl: simulationResult.simulationUrl,
+        });
+      } else {
+        setTxStatus({
+          hash: null,
+          status: 'error',
+          message: 'Tenderly не настроен. Симуляция недоступна.',
+        });
+      }
+
+    } catch (error) {
+      console.error('Simulation failed:', error);
+      setTxStatus({
+        hash: null,
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Ошибка симуляции',
+      });
+    }
+  };
+
+  const handlePrepareAuthorization = async () => {
     if (!relayerWallet || !provider || !userWallet) {
       setTxStatus({
         hash: null,
@@ -156,8 +214,8 @@ export const AuthorizationPage: React.FC = () => {
       return;
     }
 
-    // Validate function parameters if including function
-    if (includeFunction && selectedFunction !== 'authorization') {
+    // Validate function parameters if not just authorization
+    if (selectedFunction !== 'authorization') {
       const validationError = validateFunctionParameters();
       if (validationError) {
         setTxStatus({
@@ -207,7 +265,7 @@ export const AuthorizationPage: React.FC = () => {
 
       console.log(`Chain ID: ${chainId}, User Nonce: ${userNonce}`);
 
-      // 2. Готовим EIP-7702 авторизацию (точно как в примере)
+      // 2. Готовим EIP-7702 авторизацию
       const authData = {
         chainId,
         address: delegateAddress,
@@ -226,7 +284,7 @@ export const AuthorizationPage: React.FC = () => {
       const authHash = ethers.keccak256(encodedAuth);
       const authSig = userWallet.signingKey.sign(authHash);
 
-      const finalAuthData: AuthorizationData = {
+      const finalAuthData = {
         chainId: authData.chainId,
         address: authData.address,
         nonce: authData.nonce,
@@ -237,7 +295,7 @@ export const AuthorizationPage: React.FC = () => {
 
       console.log('Authorization data prepared:', finalAuthData);
 
-      // 3. Готовим пустую транзакцию от имени relayer
+      // 3. Готовим транзакцию от имени relayer
       const relayerNonce = await provider.getTransactionCount(relayerAddress!);
       const feeData = await provider.getFeeData();
 
@@ -262,7 +320,7 @@ export const AuthorizationPage: React.FC = () => {
       ];
 
       // If including function, modify transaction data
-      if (includeFunction && selectedFunction !== 'authorization') {
+      if (selectedFunction !== 'authorization') {
         const functionData = await prepareFunctionData();
         if (functionData) {
           // Update transaction with function call data
@@ -294,32 +352,10 @@ export const AuthorizationPage: React.FC = () => {
 
       console.log('Signed transaction prepared:', signedTx);
 
-      // Simulate if Tenderly is available
-      if (includeFunction && tenderlySimulator.isEnabled()) {
-        await simulateTransaction(signedTx);
-      }
-
-      // Сохраняем детали для отображения
-      setAuthorizationDetails({
-        userAddress: userWallet.address,
-        delegateAddress: delegateAddress,
-        userNonce: userNonce,
-        chainId: chainId,
-        encodedAuth: ethers.hexlify(encodedAuth),
-        authHash: authHash,
-        signature: {
-          r: authSig.r,
-          s: authSig.s,
-          yParity: authSig.yParity
-        },
-        authData: finalAuthData,
-        signedTransaction: signedTx
-      });
-
       // Сохраняем подписанную транзакцию для отправки
       (window as any).signedTransaction = signedTx;
 
-      setIsSimulated(includeFunction ? !!simulationResult?.success : true);
+      setIsSimulated(selectedFunction === 'authorization' ? true : !!simulationResult?.success);
       setTxStatus({
         hash: null,
         status: 'success',
@@ -332,6 +368,55 @@ export const AuthorizationPage: React.FC = () => {
         hash: null,
         status: 'error',
         message: error instanceof Error ? error.message : 'Ошибка подготовки авторизации',
+      });
+    }
+  };
+
+  const handleSendTransaction = async () => {
+    if (!provider) {
+      setTxStatus({
+        hash: null,
+        status: 'error',
+        message: 'Provider не настроен',
+      });
+      return;
+    }
+
+    const signedTx = (window as any).signedTransaction;
+    if (!signedTx) {
+      setTxStatus({
+        hash: null,
+        status: 'error',
+        message: 'Сначала подготовьте авторизацию',
+      });
+      return;
+    }
+
+    if (selectedFunction !== 'authorization' && !isSimulated) {
+      setTxStatus({ hash: null, status: 'error', message: 'Сначала выполните симуляцию' });
+      return;
+    }
+
+    try {
+      setTxStatus({ hash: null, status: 'pending', message: 'Отправка авторизации...' });
+
+      // 5. Отправка делегационной транзакции
+      const txHash = await provider.send('eth_sendRawTransaction', [signedTx]);
+      
+      console.log(`Delegation authorized. Transaction hash: ${txHash}`);
+
+      setTxStatus({
+        hash: txHash,
+        status: 'success',
+        message: 'EIP-7702 авторизация отправлена успешно!',
+      });
+
+    } catch (error) {
+      console.error('Transaction failed:', error);
+      setTxStatus({
+        hash: null,
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Ошибка отправки транзакции',
       });
     }
   };
@@ -368,7 +453,7 @@ export const AuthorizationPage: React.FC = () => {
 
     const contract = new ethers.Interface(sweeperABI);
     let functionData = '';
-    let gasLimit = getNetworkGasConfig(chainId || selectedNetwork)?.gasLimit || 200000;
+    let gasLimit = getNetworkGasConfig(selectedNetwork)?.gasLimit || 200000;
     let value = '0';
 
     switch (selectedFunction) {
@@ -435,12 +520,6 @@ export const AuthorizationPage: React.FC = () => {
     }
 
     return { data: functionData, gasLimit, value };
-  };
-
-  const simulateTransaction = async (signedTx: string) => {
-    // This is a simplified simulation - in practice, you'd need to decode the transaction
-    // and simulate it properly with Tenderly
-    setSimulationResult({ success: true, gasUsed: 100000 });
   };
 
   // Sequence operations management
@@ -532,51 +611,84 @@ export const AuthorizationPage: React.FC = () => {
     });
   };
 
-  const handleSendTransaction = async () => {
-    if (!provider) {
-      setTxStatus({
-        hash: null,
-        status: 'error',
-        message: 'Provider не настроен',
-      });
-      return;
-    }
+  const simulateFullSequence = async () => {
+    if (!relayerWallet || !provider || !delegateAddress) return;
 
-    const signedTx = (window as any).signedTransaction;
-    if (!signedTx) {
-      setTxStatus({
-        hash: null,
-        status: 'error',
-        message: 'Сначала подготовьте авторизацию',
-      });
-      return;
-    }
-
-    if (selectedFunction !== 'authorization' && !isSimulated) {
-      setTxStatus({ hash: null, status: 'error', message: 'Сначала выполните симуляцию' });
-      return;
-    }
+    const enabledOperations = sequenceOperations.filter(op => op.enabled);
+    if (enabledOperations.length === 0) return;
 
     try {
-      setTxStatus({ hash: null, status: 'pending', message: 'Отправка авторизации...' });
+      setTxStatus({ hash: null, status: 'pending', message: 'Симуляция полной последовательности...' });
 
-      // 5. Отправка делегационной транзакции
-      const txHash = await provider.send('eth_sendRawTransaction', [signedTx]);
-      
-      console.log(`Delegation authorized. Transaction hash: ${txHash}`);
+      const contract = new ethers.Interface(sweeperABI);
+      const targets: string[] = [];
+      const datas: string[] = [];
+      let totalValue = BigInt(0);
 
-      setTxStatus({
-        hash: txHash,
-        status: 'success',
-        message: 'EIP-7702 авторизация отправлена успешно!',
-      });
+      for (const operation of enabledOperations) {
+        targets.push(delegateAddress);
+        
+        switch (operation.type) {
+          case 'sendETH':
+            datas.push('0x');
+            if (operation.params.ethAmount) {
+              totalValue += ethers.parseEther(operation.params.ethAmount);
+            }
+            break;
+          case 'sweepETH':
+            const sweepAmount = operation.params.ethAmount || '0';
+            datas.push(contract.encodeFunctionData('sweepETH', [ethers.parseEther(sweepAmount)]));
+            break;
+          case 'sweepTokens':
+            datas.push(contract.encodeFunctionData('sweepTokens', [operation.params.tokenAddress]));
+            break;
+          case 'executeCall':
+            let callDataBytes = operation.params.callData || '0x';
+            if (!callDataBytes.startsWith('0x')) {
+              callDataBytes = '0x' + callDataBytes;
+            }
+            datas.push(contract.encodeFunctionData('executeCall', [
+              operation.params.callTarget,
+              callDataBytes
+            ]));
+            if (operation.params.ethAmount) {
+              totalValue += ethers.parseEther(operation.params.ethAmount);
+            }
+            break;
+        }
+      }
 
+      if (tenderlySimulator.isEnabled()) {
+        const multicallData = contract.encodeFunctionData('multicall', [targets, datas]);
+        
+        const network = await provider.getNetwork();
+        const simulationResult = await tenderlySimulator.simulateContractCall(
+          Number(network.chainId),
+          relayerAddress!,
+          delegateAddress,
+          multicallData,
+          totalValue.toString(),
+          (getNetworkGasConfig(selectedNetwork)?.gasLimit || 200000) + 100000
+        );
+        
+        setSimulationResult(simulationResult);
+        setIsSimulated(true);
+        
+        const formattedResult = formatSimulationResult(simulationResult);
+        
+        setTxStatus({
+          hash: null,
+          status: simulationResult.success ? 'success' : 'error',
+          message: `${formattedResult.message} (${enabledOperations.length} операций)`,
+          simulationUrl: simulationResult.simulationUrl,
+        });
+      }
     } catch (error) {
-      console.error('Transaction failed:', error);
+      console.error('Full sequence simulation failed:', error);
       setTxStatus({
         hash: null,
         status: 'error',
-        message: error instanceof Error ? error.message : 'Ошибка отправки транзакции',
+        message: error instanceof Error ? error.message : 'Ошибка симуляции последовательности',
       });
     }
   };
@@ -584,6 +696,7 @@ export const AuthorizationPage: React.FC = () => {
   const resetSimulation = () => {
     setSimulationResult(null);
     setIsSimulated(false);
+    setTxStatus({ hash: null, status: 'idle', message: '' });
   };
 
   const copyToClipboard = async (text: string, itemId: string) => {
@@ -625,13 +738,13 @@ export const AuthorizationPage: React.FC = () => {
   const getStatusColor = () => {
     switch (txStatus.status) {
       case 'pending':
-        return 'bg-gray-500/20 text-gray-300 border-gray-500/30';
+        return 'border-blue-500/20 bg-blue-500/5';
       case 'success':
-        return 'bg-green-500/20 text-green-300 border-green-500/30';
+        return 'border-green-500/20 bg-green-500/5';
       case 'error':
-        return 'bg-red-500/20 text-red-300 border-red-500/30';
+        return 'border-red-500/20 bg-red-500/5';
       default:
-        return 'bg-gray-500/20 text-gray-300 border-gray-500/30';
+        return 'border-gray-700 bg-gray-800/50';
     }
   };
 
@@ -839,6 +952,14 @@ export const AuthorizationPage: React.FC = () => {
     return false;
   };
 
+  const isSimulateDisabled = () => {
+    if (selectedFunction === 'authorization') return true;
+    if (!relayerWallet || !provider || !userWallet || !isValidAddress(delegateAddress) || txStatus.status === 'pending') {
+      return true;
+    }
+    return !!validateFunctionParameters();
+  };
+
   const isSendDisabled = () => {
     const hasSignedTx = !!(window as any).signedTransaction;
     const needsSimulation = selectedFunction !== 'authorization' && !isSimulated;
@@ -855,7 +976,7 @@ export const AuthorizationPage: React.FC = () => {
   );
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto">
       {/* Copy Notifications */}
       <CopyNotification 
         show={copiedItem === 'user-address'} 
@@ -865,221 +986,254 @@ export const AuthorizationPage: React.FC = () => {
         show={copiedItem === 'transaction-hash'} 
         text="Hash транзакции скопирован!" 
       />
-      <CopyNotification 
-        show={copiedItem === 'signed-tx'} 
-        text="Подписанная транзакция скопирована!" 
-      />
+      
+      <div className="grid grid-cols-12 gap-6">
+        {/* Function Selection */}
+        <div className="col-span-3">
+          <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
+            <h3 className="text-sm font-medium text-white mb-3">Функции</h3>
+            <div className="space-y-1">
+              {functions.map((func) => {
+                const IconComponent = func.icon;
+                return (
+                  <button
+                    key={func.id}
+                    onClick={() => {
+                      setSelectedFunction(func.id);
+                      resetSimulation();
+                    }}
+                    className={`w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
+                      selectedFunction === func.id
+                        ? 'bg-[#222225] text-white'
+                        : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    }`}
+                  >
+                    <IconComponent className="w-4 h-4" />
+                    {func.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
 
-      {/* Network Selection */}
-      <div className="bg-[#111111] border border-gray-800 rounded-lg p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Globe className="w-5 h-5 text-gray-400" />
-          <h3 className="text-lg font-semibold text-white">Выбор сети</h3>
-        </div>
-        <select
-          value={selectedNetwork}
-          onChange={(e) => setSelectedNetwork(Number(e.target.value))}
-          className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
-        >
-          {networks.map((network) => (
-            <option key={network.id} value={network.id}>
-              {network.name} (Chain ID: {network.id})
-            </option>
-          ))}
-        </select>
-      </div>
+        {/* Main Form */}
+        <div className="col-span-9 space-y-4">
+          {/* Network Selection */}
+          <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Globe className="w-4 h-4 text-gray-400" />
+              <h3 className="text-sm font-medium text-white">Сеть</h3>
+            </div>
+            <select
+              value={selectedNetwork}
+              onChange={(e) => setSelectedNetwork(Number(e.target.value))}
+              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 text-sm"
+            >
+              {networks.map((network) => (
+                <option key={network.id} value={network.id}>
+                  {network.name} (Chain ID: {network.id})
+                </option>
+              ))}
+            </select>
+          </div>
 
-      {/* Function Selection */}
-      <div className="bg-[#111111] border border-gray-800 rounded-lg p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Target className="w-5 h-5 text-gray-400" />
-          <h3 className="text-lg font-semibold text-white">Тип операции</h3>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          {functions.map((func) => {
-            const IconComponent = func.icon;
-            return (
-              <button
-                key={func.id}
-                onClick={() => {
-                  setSelectedFunction(func.id);
-                  resetSimulation();
-                }}
-                className={`flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
-                  selectedFunction === func.id
-                    ? 'bg-[#222225] text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                }`}
-              >
-                <IconComponent className="w-4 h-4" />
-                {func.name}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+          {/* User Private Key */}
+          <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Key className="w-4 h-4 text-gray-400" />
+              <h3 className="text-sm font-medium text-white">Приватный ключ пользователя</h3>
+            </div>
+            <div className="space-y-3">
+              <input
+                type="password"
+                value={userPrivateKey}
+                onChange={(e) => setUserPrivateKey(e.target.value)}
+                placeholder="0x... или без префикса"
+                className="w-full bg-[#0a0a0a] border border-gray-700 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-sm"
+              />
+              {userPrivateKey && !isValidPrivateKey(userPrivateKey) && (
+                <p className="text-red-400 text-xs">Неверный формат приватного ключа</p>
+              )}
+              
+              {userWallet && (
+                <div className="bg-[#0a0a0a] border border-gray-700 rounded p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <User className="w-3 h-3 text-gray-400" />
+                    <span className="text-xs text-gray-300">Адрес пользователя:</span>
+                  </div>
+                  <div 
+                    onClick={() => copyToClipboard(userWallet.address, 'user-address')}
+                    className="text-white font-mono text-xs cursor-pointer hover:bg-gray-800/50 transition-colors p-2 rounded flex items-center justify-between group"
+                  >
+                    <span>{userWallet.address}</span>
+                    <Copy className="w-3 h-3 text-gray-400 group-hover:text-white transition-colors" />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
 
-      {/* User Private Key */}
-      <div className="bg-[#111111] border border-gray-800 rounded-lg p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Key className="w-5 h-5 text-gray-400" />
-          <h3 className="text-lg font-semibold text-white">Приватный ключ пользователя</h3>
-        </div>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Приватный ключ (64 hex символа)
-            </label>
+          {/* Delegate Contract Address */}
+          <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Shield className="w-4 h-4 text-gray-400" />
+              <h3 className="text-sm font-medium text-white">Адрес контракта делегата</h3>
+            </div>
             <input
-              type="password"
-              value={userPrivateKey}
-              onChange={(e) => setUserPrivateKey(e.target.value)}
-              placeholder="0x... или без префикса"
-              className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent font-mono"
+              type="text"
+              value={delegateAddress}
+              onChange={(e) => setDelegateAddress(e.target.value)}
+              placeholder="0x..."
+              className="w-full bg-[#0a0a0a] border border-gray-700 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-sm"
             />
-            {userPrivateKey && !isValidPrivateKey(userPrivateKey) && (
-              <p className="text-red-400 text-sm mt-1">Неверный формат приватного ключа</p>
+            {delegateAddress && !isValidAddress(delegateAddress) && (
+              <p className="text-red-400 text-xs mt-1">Неверный формат адреса</p>
             )}
           </div>
-          
-          {userWallet && (
-            <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <User className="w-4 h-4 text-gray-400" />
-                <span className="text-sm font-medium text-gray-300">Адрес пользователя:</span>
-              </div>
-              <div 
-                onClick={() => copyToClipboard(userWallet.address, 'user-address')}
-                className="text-white font-mono text-sm cursor-pointer hover:bg-gray-800/50 transition-colors p-2 rounded flex items-center justify-between group"
-              >
-                <span>{userWallet.address}</span>
-                <Copy className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
-              </div>
+
+          {/* Function Parameters */}
+          {selectedFunction !== 'authorization' && (
+            <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
+              <h3 className="text-sm font-medium text-white mb-3">Параметры</h3>
+              {renderFunctionInputs()}
             </div>
           )}
-        </div>
-      </div>
 
-      {/* Delegate Contract Address */}
-      <div className="bg-[#111111] border border-gray-800 rounded-lg p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Shield className="w-5 h-5 text-gray-400" />
-          <h3 className="text-lg font-semibold text-white">Адрес контракта делегата</h3>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Delegate Contract Address (автоматически из конфигурации)
-          </label>
-          <input
-            type="text"
-            value={delegateAddress}
-            onChange={(e) => setDelegateAddress(e.target.value)}
-            placeholder="0x..."
-            className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent font-mono"
-          />
-          {delegateAddress && !isValidAddress(delegateAddress) && (
-            <p className="text-red-400 text-sm mt-1">Неверный формат адреса</p>
-          )}
-        </div>
-      </div>
-
-      {/* Function Parameters */}
-      {selectedFunction !== 'authorization' && (
-        <div className="bg-[#111111] border border-gray-800 rounded-lg p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Target className="w-5 h-5 text-gray-400" />
-            <h3 className="text-lg font-semibold text-white">Параметры функции</h3>
-          </div>
-          {renderFunctionInputs()}
-        </div>
-      )}
-
-      {/* Action Buttons */}
-      <div className="space-y-3">
-        <button
-          onClick={() => handlePrepareAuthorization(selectedFunction !== 'authorization')}
-          disabled={isPrepareDisabled()}
-          className="w-full bg-gradient-to-r from-gray-600 to-gray-700 text-white py-3 px-6 rounded-lg font-medium hover:from-gray-700 hover:to-gray-800 transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
-        >
-          {txStatus.status === 'pending' && txStatus.message.includes('Подготовка') ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              Подготовка...
-            </>
-          ) : (
-            <>
-              <Target className="w-5 h-5" />
-              {selectedFunction === 'authorization' ? 'Подготовить авторизацию' : 'Подготовить авторизацию + функцию'}
-            </>
-          )}
-        </button>
-
-        <button
-          onClick={handleSendTransaction}
-          disabled={isSendDisabled()}
-          className="w-full bg-gradient-to-r from-gray-600 to-gray-700 text-white py-3 px-6 rounded-lg font-medium hover:from-gray-700 hover:to-gray-800 transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
-        >
-          {txStatus.status === 'pending' && txStatus.message.includes('Отправка') ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              Отправка...
-            </>
-          ) : (
-            <>
-              <Send className="w-5 h-5" />
-              {selectedFunction === 'authorization' ? 'Отправить авторизацию' : 'Отправить авторизацию + функцию'}
-            </>
-          )}
-        </button>
-
-        {selectedFunction !== 'authorization' && isSimulated && (
-          <button
-            onClick={resetSimulation}
-            className="w-full bg-[#222225] text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-[#2a2a2d] transition-colors flex items-center justify-center gap-2"
-          >
-            <Target className="w-4 h-4" />
-            Новая симуляция
-          </button>
-        )}
-      </div>
-
-      {/* Transaction Status */}
-      {txStatus.message && (
-        <div className={`p-4 rounded-lg border ${getStatusColor()}`}>
-          <div className="flex items-center gap-2">
-            {getStatusIcon()}
-            <span className="text-sm font-medium">{txStatus.message}</span>
-          </div>
-          {txStatus.hash && (
-            <div className="mt-3 space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400">Transaction Hash:</span>
+          {/* Action Buttons */}
+          <div className="space-y-2">
+            {selectedFunction !== 'authorization' && !isSimulated ? (
+              <button
+                onClick={handleSimulate}
+                disabled={isSimulateDisabled()}
+                className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {txStatus.status === 'pending' && txStatus.message.includes('Симуляция') ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Симуляция...
+                  </>
+                ) : (
+                  <>
+                    <Target className="w-4 h-4" />
+                    Симулировать
+                  </>
+                )}
+              </button>
+            ) : selectedFunction !== 'authorization' && isSimulated ? (
+              <div className="space-y-2">
                 <button
-                  onClick={() => copyToClipboard(txStatus.hash!, 'transaction-hash')}
-                  className="text-xs font-mono text-white hover:text-gray-300 transition-colors flex items-center gap-1"
+                  onClick={handlePrepareAuthorization}
+                  disabled={isPrepareDisabled()}
+                  className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  {txStatus.hash}
-                  <Copy className="w-3 h-3" />
+                  {txStatus.status === 'pending' && txStatus.message.includes('Подготовка') ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Подготовка...
+                    </>
+                  ) : (
+                    <>
+                      <Target className="w-4 h-4" />
+                      Подготовить авторизацию + функцию
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={resetSimulation}
+                  className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors flex items-center justify-center gap-2"
+                >
+                  <Target className="w-4 h-4" />
+                  Новая симуляция
                 </button>
               </div>
-              {(() => {
-                const txUrl = getTransactionUrl(txStatus.hash, selectedNetwork);
-                return txUrl ? (
-                  <a
-                    href={txUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-gray-400 hover:text-white text-xs"
+            ) : (
+              <button
+                onClick={handlePrepareAuthorization}
+                disabled={isPrepareDisabled()}
+                className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {txStatus.status === 'pending' && txStatus.message.includes('Подготовка') ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Подготовка...
+                  </>
+                ) : (
+                  <>
+                    <Target className="w-4 h-4" />
+                    Подготовить авторизацию
+                  </>
+                )}
+              </button>
+            )}
+
+            <button
+              onClick={handleSendTransaction}
+              disabled={isSendDisabled()}
+              className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {txStatus.status === 'pending' && txStatus.message.includes('Отправка') ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Отправка...
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  {selectedFunction === 'authorization' ? 'Отправить авторизацию' : 'Отправить авторизацию + функцию'}
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Transaction Status */}
+          {txStatus.message && (
+            <div className={`border rounded-lg p-4 ${getStatusColor()}`}>
+              <div className="flex items-center gap-2 mb-2">
+                {getStatusIcon()}
+                <span className="text-sm font-medium">{txStatus.message}</span>
+              </div>
+              
+              {txStatus.hash && (
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-xs font-mono text-gray-400">{txStatus.hash}</span>
+                  <button
+                    onClick={() => copyToClipboard(txStatus.hash!, 'transaction-hash')}
+                    className="p-1 text-gray-400 hover:text-white rounded transition-colors"
                   >
-                    <ExternalLink className="w-3 h-3" />
-                    Посмотреть в блокчейн эксплорере
-                  </a>
-                ) : null;
-              })()}
+                    <Copy className="w-3 h-3" />
+                  </button>
+                  {(() => {
+                    const txUrl = getTransactionUrl(txStatus.hash, selectedNetwork);
+                    return txUrl ? (
+                      <a
+                        href={txUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1 text-gray-400 hover:text-white rounded transition-colors"
+                        title="Посмотреть транзакцию в блокчейн эксплорере"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    ) : null;
+                  })()}
+                </div>
+              )}
+              {txStatus.simulationUrl && (
+                <a
+                  href={txStatus.simulationUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs mt-2"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Посмотреть в Tenderly Dashboard
+                </a>
+              )}
             </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 };
