@@ -23,7 +23,7 @@
       "explorerUrl": "https://polygonscan.com/",
       "delegateAddress": "0x93c1bfc95c20d212c85c6bbc74bd339b3c0086da",
       "gasConfig": {
-        "gasLimit": 200000,
+        "gasLimit": 3200000,
         "maxFeePerGas": "5000000000",
         "maxPriorityFeePerGas": "1000000000",
         "authorizationGasLimit": 300000
