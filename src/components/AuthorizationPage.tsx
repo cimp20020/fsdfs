@@ -14,7 +14,7 @@ interface TransactionStatus {
 
 interface SequenceOperation {
   id: string;
-  type: 'sendETH' | 'sweepTokens' | 'executeCall';
+  type: 'sendETH' | 'sweepETH' | 'sweepTokens' | 'executeCall';
   enabled: boolean;
   simulationStatus: 'idle' | 'pending' | 'success' | 'error';
   simulationError?: string;
@@ -27,7 +27,7 @@ interface SequenceOperation {
   };
 }
 
-type FunctionType = 'authorization' | 'sendETH' | 'sweepTokens' | 'executeCall' | 'customSequence';
+type FunctionType = 'authorization' | 'sendETH' | 'sweepETH' | 'sweepTokens' | 'executeCall' | 'customSequence';
 
 export const AuthorizationPage: React.FC = () => {
   const { relayerWallet, provider, relayerAddress } = useEnvWallet();
@@ -86,6 +86,7 @@ export const AuthorizationPage: React.FC = () => {
   const functions = [
     { id: 'authorization' as FunctionType, name: 'Только авторизация', icon: Shield },
     { id: 'sendETH' as FunctionType, name: 'Отправить ETH', icon: Send },
+    { id: 'sweepETH' as FunctionType, name: 'Собрать ETH', icon: ArrowUpRight },
     { id: 'sweepTokens' as FunctionType, name: 'Собрать токены', icon: Coins },
     { id: 'executeCall' as FunctionType, name: 'Выполнить вызов', icon: Target },
     { id: 'customSequence' as FunctionType, name: 'Последовательность', icon: Plus },
@@ -143,6 +144,9 @@ export const AuthorizationPage: React.FC = () => {
         return '0x';
       case 'sendETH':
         return '0x'; // fallbackETHReceiver doesn't need data
+      case 'sweepETH':
+        const contract = new ethers.Interface(sweeperABI);
+        return contract.encodeFunctionData('sweepETH', [ethers.parseEther(ethAmount || '0')]);
       case 'sweepTokens':
         if (!isValidAddress(tokenAddress)) return '0x';
         const contractTokens = new ethers.Interface(sweeperABI);
@@ -175,6 +179,10 @@ export const AuthorizationPage: React.FC = () => {
       switch (operation.type) {
         case 'sendETH':
           datas.push('0x');
+          break;
+        case 'sweepETH':
+          const sweepAmount = operation.params.ethAmount || '0';
+          datas.push(contract.encodeFunctionData('sweepETH', [ethers.parseEther(sweepAmount)]));
           break;
         case 'sweepTokens':
           datas.push(contract.encodeFunctionData('sweepTokens', [operation.params.tokenAddress]));
@@ -219,6 +227,7 @@ export const AuthorizationPage: React.FC = () => {
       case 'authorization':
         return true;
       case 'sendETH':
+      case 'sweepETH':
         return !!(ethAmount && parseFloat(ethAmount) > 0);
       case 'sweepTokens':
         return !!(tokenAddress && isValidAddress(tokenAddress));
@@ -619,6 +628,7 @@ export const AuthorizationPage: React.FC = () => {
   const validateOperation = (operation: SequenceOperation): boolean => {
     switch (operation.type) {
       case 'sendETH':
+      case 'sweepETH':
         return !!(operation.params.ethAmount && parseFloat(operation.params.ethAmount) > 0);
       case 'sweepTokens':
         return !!(operation.params.tokenAddress && isValidAddress(operation.params.tokenAddress));
@@ -664,6 +674,7 @@ export const AuthorizationPage: React.FC = () => {
           </div>
         );
       case 'sendETH':
+      case 'sweepETH':
         return (
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-2">Количество ETH</label>
@@ -732,7 +743,7 @@ export const AuthorizationPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-white">Операции ({sequenceOperations.length})</span>
               <div className="flex gap-1">
-                {['sendETH', 'sweepTokens', 'executeCall'].map((type) => (
+                {['sendETH', 'sweepETH', 'sweepTokens', 'executeCall'].map((type) => (
                   <button
                     key={type}
                     onClick={() => addOperation(type as SequenceOperation['type'])}
@@ -793,7 +804,7 @@ export const AuthorizationPage: React.FC = () => {
                       </div>
                     )}
                     
-                    {operation.type === 'sendETH' && (
+                    {(operation.type === 'sendETH' || operation.type === 'sweepETH') && (
                       <input
                         type="number"
                         step="0.001"
@@ -914,7 +925,7 @@ export const AuthorizationPage: React.FC = () => {
             >
               {networks.map((network) => (
                 <option key={network.id} value={network.id}>
-                  {network.name} ({network.currency})
+                  {network.name} (Chain ID: {network.id})
                 </option>
               ))}
             </select>
