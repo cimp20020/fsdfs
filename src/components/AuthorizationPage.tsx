@@ -25,6 +25,9 @@ export const AuthorizationPage: React.FC = () => {
   const [simulationResult, setSimulationResult] = useState<any>(null);
   const [isSimulated, setIsSimulated] = useState(false);
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
+  const [customGasLimit, setCustomGasLimit] = useState('100000');
+  const [customMaxFee, setCustomMaxFee] = useState('50'); // в GWEI
+  const [customMaxPriorityFee, setCustomMaxPriorityFee] = useState('2'); // в GWEI
 
   const networks = getAllNetworks();
 
