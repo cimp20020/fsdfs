@@ -381,7 +381,7 @@ export const AuthorizationPage: React.FC = () => {
             >
               {networks.map((network) => (
                 <option key={network.id} value={network.id}>
-                  {network.name} (Chain ID: {network.id})
+                  {network.name} ({network.currency})
                 </option>
               ))}
             </select>
