@@ -102,39 +102,29 @@ export const AuthorizationPage: React.FC = () => {
       setTxStatus({ hash: null, status: 'pending', message: 'Создание подписи авторизации...' });
 
       // Create EIP-7702 authorization data
-      const authData = {
-        chainId: ethers.toBeHex(chainId),
-        address: delegateAddress.toLowerCase(),
-        nonce: ethers.toBeHex(userNonce),
-      };
-
-      // Create authorization signature with proper EIP-7702 structure
+      // EIP-7702 Authorization structure: [chainId, address, nonce]
       const authTuple = [
-        ethers.toBeHex(chainId), // Convert to hex
-        delegateAddress, // Address is already correct format
-        ethers.toBeHex(userNonce) // Convert to hex
+        chainId,           // Keep as number for RLP encoding
+        delegateAddress,   // Address as string
+        userNonce         // Keep as number for RLP encoding
       ];
 
-      // Create the authorization hash according to EIP-7702
-      const encodedAuth = ethers.concat([
-        '0x05', // EIP-7702 magic byte
-        ethers.encodeRlp(authTuple)
-      ]);
-
+      // Create authorization hash according to EIP-7702 spec
+      const encodedAuth = ethers.encodeRlp(authTuple);
       const authHash = ethers.keccak256(encodedAuth);
       
-      // Sign the hash directly (not as message)
+      // Sign the authorization hash
       const authSig = userWallet.signingKey.sign(authHash);
 
-      // Parse the signature
+      // Extract signature components
       const signature = ethers.Signature.from(authSig);
       
-      // Create proper authorization structure
+      // Create EIP-7702 authorization object
       const authorization = {
         chainId: chainId,
         address: delegateAddress,
         nonce: userNonce,
-        yParity: signature.yParity,
+        yParity: signature.yParity, // This should be 0 or 1
         r: signature.r,
         s: signature.s,
       };
@@ -181,13 +171,13 @@ export const AuthorizationPage: React.FC = () => {
       // Store authorization details for display
       setAuthorizationDetails({
         originalData: {
-          chainId: ethers.toBeHex(chainId),
-          address: delegateAddress.toLowerCase(),
-          nonce: ethers.toBeHex(userNonce)
+          chainId: chainId,
+          address: delegateAddress,
+          nonce: userNonce
         },
         encodedAuth: ethers.hexlify(encodedAuth),
         authHash: authHash,
-        signature: authSig ? authSig.serialized : 'N/A',
+        signature: authSig.serialized,
         parsedSignature: {
           r: signature.r,
           s: signature.s,
