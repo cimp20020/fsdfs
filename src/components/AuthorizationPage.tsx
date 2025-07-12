@@ -505,98 +505,11 @@ export const AuthorizationPage: React.FC = () => {
         </div>
       )}
 
-      {/* Authorization Details */}
-      {authorizationDetails && (
-        <div className="bg-[#111111] border border-gray-800 rounded-lg p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <CheckCircle className="w-5 h-5 text-green-400" />
-            <h3 className="text-lg font-semibold text-white">Детали авторизации</h3>
-          </div>
-          
-          <div className="space-y-4 text-sm">
-            {/* Basic Info */}
-            <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
-              <h4 className="text-white font-medium mb-2">Основная информация:</h4>
-              <div className="space-y-1 font-mono text-xs">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">User Address:</span>
-                  <span className="text-white break-all">{authorizationDetails.userAddress}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Delegate Address:</span>
-                  <span className="text-white break-all">{authorizationDetails.delegateAddress}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Chain ID:</span>
-                  <span className="text-white">{authorizationDetails.chainId}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">User Nonce:</span>
-                  <span className="text-white">{authorizationDetails.userNonce}</span>
-                </div>
-              </div>
-            </div>
 
-            {/* Encoded Authorization */}
-            <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
-              <h4 className="text-white font-medium mb-2">Закодированная авторизация:</h4>
-              <div className="font-mono text-xs text-white break-all bg-gray-900 p-2 rounded">
-                {authorizationDetails.encodedAuth}
-              </div>
-            </div>
 
-            {/* Authorization Hash */}
-            <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
-              <h4 className="text-white font-medium mb-2">Хеш авторизации:</h4>
-              <div className="font-mono text-xs text-white break-all bg-gray-900 p-2 rounded">
-                {authorizationDetails.authHash}
-              </div>
-            </div>
 
-            {/* Signature */}
-            <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
-              <h4 className="text-white font-medium mb-2">Подпись:</h4>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <span className="text-gray-400">r:</span>
-                  <div className="font-mono text-white break-all">{authorizationDetails.signature.r}</div>
-                </div>
-                <div>
-                  <span className="text-gray-400">s:</span>
-                  <div className="font-mono text-white break-all">{authorizationDetails.signature.s}</div>
-                </div>
-                <div>
-                  <span className="text-gray-400">yParity:</span>
-                  <div className="font-mono text-white">{authorizationDetails.signature.yParity}</div>
-                </div>
-              </div>
-            </div>
 
-            {/* Final Authorization Data */}
-            <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
-              <h4 className="text-white font-medium mb-2">Финальные данные авторизации:</h4>
-              <pre className="font-mono text-xs text-white bg-gray-900 p-2 rounded overflow-x-auto">
-{JSON.stringify(authorizationDetails.authData, null, 2)}
-              </pre>
-            </div>
 
-            {/* Signed Transaction */}
-            <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
-              <h4 className="text-white font-medium mb-2">Подписанная транзакция:</h4>
-              <div className="font-mono text-xs text-white break-all bg-gray-900 p-2 rounded max-h-32 overflow-y-auto">
-                {authorizationDetails.signedTransaction}
-              </div>
-              <button
-                onClick={() => copyToClipboard(authorizationDetails.signedTransaction, 'signed-tx')}
-                className="mt-2 px-3 py-1 bg-[#222225] text-white rounded text-xs hover:bg-[#2a2a2d] transition-colors flex items-center gap-1"
-              >
-                <Copy className="w-3 h-3" />
-                Копировать транзакцию
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
