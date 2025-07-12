@@ -355,8 +355,8 @@ export const AuthorizationPage: React.FC = () => {
         ethers.toBeHex(feeData.maxPriorityFeePerGas || ethers.parseUnits('2', 'gwei')),
         ethers.toBeHex(feeData.maxFeePerGas || ethers.parseUnits('50', 'gwei')),
         ethers.toBeHex(getNetworkAuthorizationGasLimit(chainId)),
-        userWallet.address,     // sender (delegator)
-        userWallet.address,     // to (user address for function execution)
+        delegateAddress,        // to (delegate contract address)
+        ethers.toBeHex(ethers.parseEther(getTransactionValue())), // value
         functionData,           // data (function call or 0x for simple authorization)
         [],                     // accessList
         [[
@@ -369,10 +369,6 @@ export const AuthorizationPage: React.FC = () => {
         ]]
       ];
 
-      // Add value if needed
-      if (transactionValue && parseFloat(transactionValue) > 0) {
-        txData[6] = ethers.toBeHex(ethers.parseEther(transactionValue)); // Update value field
-      }
 
       // 5. Подпись relayer'ом
       const encodedTx = ethers.encodeRlp(txData);
