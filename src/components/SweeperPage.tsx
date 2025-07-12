@@ -33,8 +33,7 @@ export const SweeperPage: React.FC = () => {
   const { chainId } = useEnvWallet();
   const [contractAddress, setContractAddress] = useState('');
   const [selectedFunction, setSelectedFunction] = useState<FunctionType>('sendETH');
-  const networks = getAllNetworks();
-  const [selectedNetwork, setSelectedNetwork] = useState<number>(networks[0]?.id || 56);
+  const [selectedNetwork, setSelectedNetwork] = useState<number>(chainId || 1);
   const [recipientAddress, setRecipientAddress] = useState('');
   const [tokenAddress, setTokenAddress] = useState('');
   const [callTarget, setCallTarget] = useState('');
@@ -71,6 +70,7 @@ export const SweeperPage: React.FC = () => {
     return new ethers.Wallet(relayerKey, provider);
   };
 
+  const networks = getAllNetworks();
 
   // Sweeper contract ABI
   const sweeperABI = [
