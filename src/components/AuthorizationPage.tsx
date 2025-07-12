@@ -185,7 +185,20 @@ export const AuthorizationPage: React.FC = () => {
         throw new Error(`Не удалось получить данные сети. Используйте выбранную сеть: ${selectedNetwork}`);
       }
       
-      const chainId = Number(network.chainId);
+      // Надежное преобразование chainId через BigInt
+      let chainId: number;
+      try {
+        const chainIdBigInt = BigInt(network.chainId);
+        
+        // Проверяем что значение в безопасном диапазоне для Number
+        if (chainIdBigInt > BigInt(Number.MAX_SAFE_INTEGER)) {
+          throw new Error(`chainId слишком большой: ${chainIdBigInt}`);
+        }
+        
+        chainId = Number(chainIdBigInt);
+      } catch (conversionError) {
+        throw new Error(`Ошибка преобразования chainId: ${network.chainId}. ${conversionError instanceof Error ? conversionError.message : 'Неизвестная ошибка'}`);
+      }
       
       // Дополнительная проверка chainId
       if (!chainId || chainId === 0) {
