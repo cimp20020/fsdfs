@@ -11,8 +11,8 @@ function App() {
 
   const pages = [
     { id: 'authorization' as Page, name: 'Авторизация', icon: Shield },
-    { id: 'sweeper' as Page, name: 'Управление Контрактами', icon: Wrench },
-    { id: 'relayer' as Page, name: 'Мониторинг Релейера', icon: Server },
+    { id: 'sweeper' as Page, name: 'Управление', icon: Wrench },
+    { id: 'relayer' as Page, name: 'Мониторинг', icon: Server },
   ];
 
   return (
