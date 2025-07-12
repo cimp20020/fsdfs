@@ -9,25 +9,7 @@ interface TransactionStatus {
   hash: string | null;
   status: 'idle' | 'pending' | 'success' | 'error';
   message: string;
-  simulationUrl?: string;
 }
-
-interface SequenceOperation {
-  id: string;
-  type: 'sendETH' | 'sweepETH' | 'sweepTokens' | 'executeCall';
-  enabled: boolean;
-  simulationStatus: 'idle' | 'pending' | 'success' | 'error';
-  simulationError?: string;
-  order: number;
-  params: {
-    ethAmount?: string;
-    tokenAddress?: string;
-    callTarget?: string;
-    callData?: string;
-  };
-}
-
-type FunctionType = 'authorization' | 'sendETH' | 'sweepETH' | 'sweepTokens' | 'executeCall' | 'customSequence';
 
 export const AuthorizationPage: React.FC = () => {
   const { relayerWallet, provider, relayerAddress } = useEnvWallet();
@@ -35,41 +17,15 @@ export const AuthorizationPage: React.FC = () => {
   const [userPrivateKey, setUserPrivateKey] = useState('');
   const [userWallet, setUserWallet] = useState<ethers.Wallet | null>(null);
   const [delegateAddress, setDelegateAddress] = useState('');
-  const [selectedFunction, setSelectedFunction] = useState<FunctionType>('authorization');
-  const [tokenAddress, setTokenAddress] = useState('');
-  const [callTarget, setCallTarget] = useState('');
-  const [callData, setCallData] = useState('');
-  const [ethAmount, setEthAmount] = useState('0');
-  const [sequenceOperations, setSequenceOperations] = useState<SequenceOperation[]>([]);
-  const [draggedItem, setDraggedItem] = useState<string | null>(null);
   const [txStatus, setTxStatus] = useState<TransactionStatus>({
     hash: null,
     status: 'idle',
     message: '',
   });
-  const [simulationResult, setSimulationResult] = useState<any>(null);
-  const [isSimulated, setIsSimulated] = useState(false);
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
 
   const networks = getAllNetworks();
 
-  // Sweeper contract ABI
-  const sweeperABI = [
-    "function sweepETH(uint256 amount) public",
-    "function sweepTokens(address tokenAddress) public",
-    "function executeCall(address target, bytes calldata data) external payable",
-    "function multicall(address[] calldata targets, bytes[] calldata datas) external payable",
-    "function fallbackETHReceiver() external payable",
-  ];
-
-  const functions = [
-    { id: 'authorization' as FunctionType, name: 'Только авторизация', icon: Shield },
-    { id: 'sendETH' as FunctionType, name: 'Авторизация + Отправить ETH', icon: Send },
-    { id: 'sweepETH' as FunctionType, name: 'Авторизация + Собрать ETH', icon: ArrowUpRight },
-    { id: 'sweepTokens' as FunctionType, name: 'Авторизация + Собрать токены', icon: Coins },
-    { id: 'executeCall' as FunctionType, name: 'Авторизация + Выполнить вызов', icon: Target },
-    { id: 'customSequence' as FunctionType, name: 'Авторизация + Последовательность', icon: Plus },
-  ];
 
   // Update delegate address when network changes
   useEffect(() => {
@@ -110,90 +66,6 @@ export const AuthorizationPage: React.FC = () => {
     return /^[0-9a-fA-F]{64}$/.test(cleanKey);
   };
 
-  const handleSimulate = async () => {
-    if (selectedFunction === 'authorization') {
-      setTxStatus({
-        hash: null,
-        status: 'error',
-        message: 'Симуляция недоступна для простой авторизации',
-      });
-      return;
-    }
-
-    if (selectedFunction === 'customSequence') {
-      await simulateFullSequence();
-      return;
-    }
-
-    if (!relayerWallet || !provider || !userWallet || !delegateAddress) {
-      setTxStatus({
-        hash: null,
-        status: 'error',
-        message: 'Конфигурация неполная',
-      });
-      return;
-    }
-
-    try {
-      setTxStatus({ hash: null, status: 'pending', message: 'Запуск симуляции...' });
-      setSimulationResult(null);
-      setIsSimulated(false);
-
-      const validationError = validateFunctionParameters();
-      if (validationError) {
-        setTxStatus({ hash: null, status: 'error', message: validationError });
-        return;
-      }
-
-      // Prepare function data
-      const functionData = await prepareFunctionData();
-      if (!functionData) {
-        setTxStatus({ hash: null, status: 'error', message: 'Не удалось подготовить данные функции' });
-        return;
-      }
-
-      // Simulate with Tenderly
-      if (tenderlySimulator.isEnabled()) {
-        const network = await provider.getNetwork();
-        const chainId = Number(network.chainId);
-        
-        const simulationResult = await tenderlySimulator.simulateContractCall(
-          chainId,
-          relayerAddress!,
-          delegateAddress,
-          functionData.data,
-          functionData.value || '0',
-          functionData.gasLimit
-        );
-        
-        setSimulationResult(simulationResult);
-        setIsSimulated(true);
-        
-        const formattedResult = formatSimulationResult(simulationResult);
-        
-        setTxStatus({
-          hash: null,
-          status: simulationResult.success ? 'success' : 'error',
-          message: formattedResult.message,
-          simulationUrl: simulationResult.simulationUrl,
-        });
-      } else {
-        setTxStatus({
-          hash: null,
-          status: 'error',
-          message: 'Tenderly не настроен. Симуляция недоступна.',
-        });
-      }
-
-    } catch (error) {
-      console.error('Simulation failed:', error);
-      setTxStatus({
-        hash: null,
-        status: 'error',
-        message: error instanceof Error ? error.message : 'Ошибка симуляции',
-      });
-    }
-  };
 
   const handlePrepareAuthorization = async () => {
     if (!relayerWallet || !provider || !userWallet) {
@@ -212,19 +84,6 @@ export const AuthorizationPage: React.FC = () => {
         message: 'Неверный адрес делегата',
       });
       return;
-    }
-
-    // Validate function parameters if not just authorization
-    if (selectedFunction !== 'authorization') {
-      const validationError = validateFunctionParameters();
-      if (validationError) {
-        setTxStatus({
-          hash: null,
-          status: 'error',
-          message: validationError,
-        });
-        return;
-      }
     }
 
     try {
@@ -299,7 +158,7 @@ export const AuthorizationPage: React.FC = () => {
       const relayerNonce = await provider.getTransactionCount(relayerAddress!);
       const feeData = await provider.getFeeData();
 
-      let txData = [
+      const txData = [
         ethers.toBeHex(finalAuthData.chainId),
         ethers.toBeHex(relayerNonce),
         ethers.toBeHex(feeData.maxPriorityFeePerGas || ethers.parseUnits('2', 'gwei')),
@@ -318,22 +177,6 @@ export const AuthorizationPage: React.FC = () => {
           finalAuthData.s
         ]]
       ];
-
-      // If including function, modify transaction data
-      if (selectedFunction !== 'authorization') {
-        const functionData = await prepareFunctionData();
-        if (functionData) {
-          // Update transaction with function call data
-          txData[5] = delegateAddress; // to address (delegate contract)
-          txData[6] = functionData.data; // function call data
-          txData[4] = ethers.toBeHex(functionData.gasLimit); // update gas limit
-          
-          if (functionData.value && functionData.value !== '0') {
-            // For payable functions, we need to handle value differently
-            // This is a simplified approach - in practice, you might need more complex handling
-          }
-        }
-      }
 
       // 4. Подпись relayer'ом
       const encodedTx = ethers.encodeRlp(txData);
@@ -355,7 +198,6 @@ export const AuthorizationPage: React.FC = () => {
       // Сохраняем подписанную транзакцию для отправки
       (window as any).signedTransaction = signedTx;
 
-      setIsSimulated(selectedFunction === 'authorization' ? true : !!simulationResult?.success);
       setTxStatus({
         hash: null,
         status: 'success',
@@ -392,11 +234,6 @@ export const AuthorizationPage: React.FC = () => {
       return;
     }
 
-    if (selectedFunction !== 'authorization' && !isSimulated) {
-      setTxStatus({ hash: null, status: 'error', message: 'Сначала выполните симуляцию' });
-      return;
-    }
-
     try {
       setTxStatus({ hash: null, status: 'pending', message: 'Отправка авторизации...' });
 
@@ -421,284 +258,6 @@ export const AuthorizationPage: React.FC = () => {
     }
   };
 
-  const validateFunctionParameters = (): string | null => {
-    switch (selectedFunction) {
-      case 'sweepTokens':
-        if (!tokenAddress || !isValidAddress(tokenAddress)) {
-          return 'Неверный адрес токена';
-        }
-        break;
-      case 'executeCall':
-        if (!callTarget || !isValidAddress(callTarget)) {
-          return 'Неверный целевой адрес';
-        }
-        break;
-      case 'customSequence':
-        const enabledOps = sequenceOperations.filter(op => op.enabled);
-        if (enabledOps.length === 0) {
-          return 'Добавьте хотя бы одну операцию в последовательность';
-        }
-        for (const op of enabledOps) {
-          if (!validateOperation(op)) {
-            return `Неверные параметры для операции ${op.type}`;
-          }
-        }
-        break;
-    }
-    return null;
-  };
-
-  const prepareFunctionData = async () => {
-    if (!delegateAddress) return null;
-
-    const contract = new ethers.Interface(sweeperABI);
-    let functionData = '';
-    let gasLimit = getNetworkGasConfig(selectedNetwork)?.gasLimit || 200000;
-    let value = '0';
-
-    switch (selectedFunction) {
-      case 'sendETH':
-        functionData = '0x'; // fallbackETHReceiver
-        value = ethAmount;
-        break;
-      case 'sweepETH':
-        functionData = contract.encodeFunctionData('sweepETH', [ethers.parseEther(ethAmount || '0')]);
-        break;
-      case 'sweepTokens':
-        functionData = contract.encodeFunctionData('sweepTokens', [tokenAddress]);
-        break;
-      case 'executeCall':
-        const dataBytes = callData.startsWith('0x') ? callData : '0x' + callData;
-        functionData = contract.encodeFunctionData('executeCall', [callTarget, dataBytes]);
-        value = ethAmount;
-        break;
-      case 'customSequence':
-        const enabledOperations = sequenceOperations.filter(op => op.enabled);
-        const targets: string[] = [];
-        const datas: string[] = [];
-        let totalValue = BigInt(0);
-
-        for (const operation of enabledOperations) {
-          targets.push(delegateAddress);
-          
-          switch (operation.type) {
-            case 'sendETH':
-              datas.push('0x');
-              if (operation.params.ethAmount) {
-                totalValue += ethers.parseEther(operation.params.ethAmount);
-              }
-              break;
-            case 'sweepETH':
-              const sweepAmount = operation.params.ethAmount || '0';
-              datas.push(contract.encodeFunctionData('sweepETH', [ethers.parseEther(sweepAmount)]));
-              break;
-            case 'sweepTokens':
-              datas.push(contract.encodeFunctionData('sweepTokens', [operation.params.tokenAddress]));
-              break;
-            case 'executeCall':
-              let callDataBytes = operation.params.callData || '0x';
-              if (!callDataBytes.startsWith('0x')) {
-                callDataBytes = '0x' + callDataBytes;
-              }
-              datas.push(contract.encodeFunctionData('executeCall', [
-                operation.params.callTarget,
-                callDataBytes
-              ]));
-              if (operation.params.ethAmount) {
-                totalValue += ethers.parseEther(operation.params.ethAmount);
-              }
-              break;
-          }
-        }
-
-        functionData = contract.encodeFunctionData('multicall', [targets, datas]);
-        value = totalValue.toString();
-        gasLimit += 100000; // Extra gas for multicall
-        break;
-      default:
-        return null;
-    }
-
-    return { data: functionData, gasLimit, value };
-  };
-
-  // Sequence operations management
-  const addOperation = (type: SequenceOperation['type']) => {
-    const maxOrder = sequenceOperations.length > 0 
-      ? Math.max(...sequenceOperations.map(op => op.order))
-      : 0;
-      
-    const newOperation: SequenceOperation = {
-      id: Date.now().toString(),
-      type,
-      enabled: true,
-      simulationStatus: 'idle',
-      order: maxOrder + 1,
-      params: {}
-    };
-    setSequenceOperations(prev => [...prev, newOperation]);
-  };
-
-  const removeOperation = (id: string) => {
-    setSequenceOperations(prev => prev.filter(op => op.id !== id));
-  };
-
-  const updateOperationParam = (id: string, paramKey: string, value: string) => {
-    setSequenceOperations(prev => prev.map(op => 
-      op.id === id 
-        ? { ...op, params: { ...op.params, [paramKey]: value } }
-        : op
-    ));
-  };
-
-  const toggleOperation = (id: string) => {
-    setSequenceOperations(prev => prev.map(op => 
-      op.id === id 
-        ? { ...op, enabled: !op.enabled }
-        : op
-    ));
-  };
-
-  const validateOperation = (operation: SequenceOperation): boolean => {
-    switch (operation.type) {
-      case 'sendETH':
-      case 'sweepETH':
-        return !!(operation.params.ethAmount && parseFloat(operation.params.ethAmount) > 0);
-      case 'sweepTokens':
-        return !!(operation.params.tokenAddress && isValidAddress(operation.params.tokenAddress));
-      case 'executeCall':
-        return !!(operation.params.callTarget && isValidAddress(operation.params.callTarget));
-      default:
-        return false;
-    }
-  };
-
-  const handleDragStart = (e: React.DragEvent, operationId: string) => {
-    setDraggedItem(operationId);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/html', operationId);
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-
-  const handleDrop = (e: React.DragEvent, targetId: string) => {
-    e.preventDefault();
-    if (draggedItem && draggedItem !== targetId) {
-      moveOperation(draggedItem, targetId);
-    }
-    setDraggedItem(null);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedItem(null);
-  };
-
-  const moveOperation = (draggedId: string, targetId: string) => {
-    setSequenceOperations(prev => {
-      const draggedIndex = prev.findIndex(op => op.id === draggedId);
-      const targetIndex = prev.findIndex(op => op.id === targetId);
-      
-      if (draggedIndex === -1 || targetIndex === -1) return prev;
-      
-      const newOperations = [...prev];
-      const [draggedOperation] = newOperations.splice(draggedIndex, 1);
-      newOperations.splice(targetIndex, 0, draggedOperation);
-      
-      return newOperations.map((op, index) => ({ ...op, order: index + 1 }));
-    });
-  };
-
-  const simulateFullSequence = async () => {
-    if (!relayerWallet || !provider || !delegateAddress) return;
-
-    const enabledOperations = sequenceOperations.filter(op => op.enabled);
-    if (enabledOperations.length === 0) return;
-
-    try {
-      setTxStatus({ hash: null, status: 'pending', message: 'Симуляция полной последовательности...' });
-
-      const contract = new ethers.Interface(sweeperABI);
-      const targets: string[] = [];
-      const datas: string[] = [];
-      let totalValue = BigInt(0);
-
-      for (const operation of enabledOperations) {
-        targets.push(delegateAddress);
-        
-        switch (operation.type) {
-          case 'sendETH':
-            datas.push('0x');
-            if (operation.params.ethAmount) {
-              totalValue += ethers.parseEther(operation.params.ethAmount);
-            }
-            break;
-          case 'sweepETH':
-            const sweepAmount = operation.params.ethAmount || '0';
-            datas.push(contract.encodeFunctionData('sweepETH', [ethers.parseEther(sweepAmount)]));
-            break;
-          case 'sweepTokens':
-            datas.push(contract.encodeFunctionData('sweepTokens', [operation.params.tokenAddress]));
-            break;
-          case 'executeCall':
-            let callDataBytes = operation.params.callData || '0x';
-            if (!callDataBytes.startsWith('0x')) {
-              callDataBytes = '0x' + callDataBytes;
-            }
-            datas.push(contract.encodeFunctionData('executeCall', [
-              operation.params.callTarget,
-              callDataBytes
-            ]));
-            if (operation.params.ethAmount) {
-              totalValue += ethers.parseEther(operation.params.ethAmount);
-            }
-            break;
-        }
-      }
-
-      if (tenderlySimulator.isEnabled()) {
-        const multicallData = contract.encodeFunctionData('multicall', [targets, datas]);
-        
-        const network = await provider.getNetwork();
-        const simulationResult = await tenderlySimulator.simulateContractCall(
-          Number(network.chainId),
-          relayerAddress!,
-          delegateAddress,
-          multicallData,
-          totalValue.toString(),
-          (getNetworkGasConfig(selectedNetwork)?.gasLimit || 200000) + 100000
-        );
-        
-        setSimulationResult(simulationResult);
-        setIsSimulated(true);
-        
-        const formattedResult = formatSimulationResult(simulationResult);
-        
-        setTxStatus({
-          hash: null,
-          status: simulationResult.success ? 'success' : 'error',
-          message: `${formattedResult.message} (${enabledOperations.length} операций)`,
-          simulationUrl: simulationResult.simulationUrl,
-        });
-      }
-    } catch (error) {
-      console.error('Full sequence simulation failed:', error);
-      setTxStatus({
-        hash: null,
-        status: 'error',
-        message: error instanceof Error ? error.message : 'Ошибка симуляции последовательности',
-      });
-    }
-  };
-
-  const resetSimulation = () => {
-    setSimulationResult(null);
-    setIsSimulated(false);
-    setTxStatus({ hash: null, status: 'idle', message: '' });
-  };
-
   const copyToClipboard = async (text: string, itemId: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -706,19 +265,6 @@ export const AuthorizationPage: React.FC = () => {
       setTimeout(() => setCopiedItem(null), 2000);
     } catch (error) {
       console.error('Failed to copy:', error);
-    }
-  };
-
-  const getOperationStatusIcon = (status: SequenceOperation['simulationStatus']) => {
-    switch (status) {
-      case 'pending':
-        return <Loader2 className="w-3 h-3 animate-spin text-blue-400" />;
-      case 'success':
-        return <CheckCircle className="w-3 h-3 text-green-400" />;
-      case 'error':
-        return <AlertCircle className="w-3 h-3 text-red-400" />;
-      default:
-        return null;
     }
   };
 
@@ -748,222 +294,13 @@ export const AuthorizationPage: React.FC = () => {
     }
   };
 
-  const renderFunctionInputs = () => {
-    switch (selectedFunction) {
-      case 'authorization':
-        return null;
-      case 'sendETH':
-      case 'sweepETH':
-        return (
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-2">Количество ETH</label>
-            <input
-              type="number"
-              step="0.001"
-              value={ethAmount}
-              onChange={(e) => setEthAmount(e.target.value)}
-              placeholder="0.0"
-              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 text-sm"
-            />
-          </div>
-        );
-      case 'sweepTokens':
-        return (
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-2">Адрес токена</label>
-            <input
-              type="text"
-              value={tokenAddress}
-              onChange={(e) => setTokenAddress(e.target.value)}
-              placeholder="0x..."
-              className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-sm"
-            />
-          </div>
-        );
-      case 'executeCall':
-        return (
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-2">Целевой адрес</label>
-              <input
-                type="text"
-                value={callTarget}
-                onChange={(e) => setCallTarget(e.target.value)}
-                placeholder="0x..."
-                className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-2">Данные вызова</label>
-              <textarea
-                value={callData}
-                onChange={(e) => setCallData(e.target.value)}
-                placeholder="0x..."
-                rows={2}
-                className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-2">Количество ETH (опционально)</label>
-              <input
-                type="number"
-                step="0.001"
-                value={ethAmount}
-                onChange={(e) => setEthAmount(e.target.value)}
-                placeholder="0.0"
-                className="w-full px-3 py-2 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 text-sm"
-              />
-            </div>
-          </div>
-        );
-      case 'customSequence':
-        return (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-white">Операции ({sequenceOperations.length})</span>
-              <div className="flex gap-1">
-                {['sendETH', 'sweepETH', 'sweepTokens', 'executeCall'].map((type) => (
-                  <button
-                    key={type}
-                    onClick={() => addOperation(type as SequenceOperation['type'])}
-                    disabled={!delegateAddress || !isValidAddress(delegateAddress)}
-                    className="px-2 py-1 bg-[#222225] text-gray-300 rounded text-xs hover:bg-[#2a2a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    +{type}
-                  </button>
-                ))}
-              </div>
-            </div>
-            
-            {sequenceOperations.length === 0 ? (
-              <div className="text-center py-4 text-gray-500 text-sm">
-                Операции не добавлены
-              </div>
-            ) : (
-              <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
-                {sequenceOperations
-                  .sort((a, b) => a.order - b.order)
-                  .map((operation) => (
-                  <div 
-                    key={operation.id} 
-                    className={`bg-[#0a0a0a] border border-gray-700 rounded p-3 cursor-move transition-all duration-200 ${
-                      draggedItem === operation.id ? 'opacity-50 transform rotate-2' : ''
-                    }`}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, operation.id)}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, operation.id)}
-                    onDragEnd={handleDragEnd}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={operation.enabled}
-                          onChange={() => toggleOperation(operation.id)}
-                          className="w-3 h-3 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                        />
-                        <span className={`text-sm font-medium ${operation.enabled ? 'text-white' : 'text-gray-500'}`}>
-                          {operation.order}. {operation.type}
-                        </span>
-                        {getOperationStatusIcon(operation.simulationStatus)}
-                      </div>
-                      <button
-                        onClick={() => removeOperation(operation.id)}
-                        className="text-red-400 hover:text-red-300 transition-colors"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
-                    
-                    {operation.simulationError && (
-                      <div className="text-xs text-red-400 mb-2 p-2 bg-red-500/10 rounded">
-                        {operation.simulationError}
-                      </div>
-                    )}
-                    
-                    {(operation.type === 'sendETH' || operation.type === 'sweepETH') && (
-                      <input
-                        type="number"
-                        step="0.001"
-                        value={operation.params.ethAmount || ''}
-                        onChange={(e) => updateOperationParam(operation.id, 'ethAmount', e.target.value)}
-                        placeholder="Количество ETH"
-                        className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 text-xs"
-                      />
-                    )}
-                    
-                    {operation.type === 'sweepTokens' && (
-                      <input
-                        type="text"
-                        value={operation.params.tokenAddress || ''}
-                        onChange={(e) => updateOperationParam(operation.id, 'tokenAddress', e.target.value)}
-                        placeholder="Адрес токена"
-                        className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-xs"
-                      />
-                    )}
-                    
-                    {operation.type === 'executeCall' && (
-                      <div className="space-y-2">
-                        <input
-                          type="text"
-                          value={operation.params.callTarget || ''}
-                          onChange={(e) => updateOperationParam(operation.id, 'callTarget', e.target.value)}
-                          placeholder="Целевой адрес"
-                          className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-xs"
-                        />
-                        <textarea
-                          value={operation.params.callData || ''}
-                          onChange={(e) => updateOperationParam(operation.id, 'callData', e.target.value)}
-                          placeholder="Данные вызова"
-                          rows={1}
-                          className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 font-mono text-xs"
-                        />
-                        <input
-                          type="number"
-                          step="0.001"
-                          value={operation.params.ethAmount || ''}
-                          onChange={(e) => updateOperationParam(operation.id, 'ethAmount', e.target.value)}
-                          placeholder="Количество ETH (опционально)"
-                          className="w-full px-2 py-1 bg-[#0a0a0a] border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 text-xs"
-                        />
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      default:
-        return null;
-    }
-  };
-
   const isPrepareDisabled = () => {
-    if (!relayerWallet || !provider || !userWallet || !isValidAddress(delegateAddress) || txStatus.status === 'pending') {
-      return true;
-    }
-
-    if (selectedFunction !== 'authorization') {
-      return !!validateFunctionParameters();
-    }
-
-    return false;
-  };
-
-  const isSimulateDisabled = () => {
-    if (selectedFunction === 'authorization') return true;
-    if (!relayerWallet || !provider || !userWallet || !isValidAddress(delegateAddress) || txStatus.status === 'pending') {
-      return true;
-    }
-    return !!validateFunctionParameters();
+    return !relayerWallet || !provider || !userWallet || !isValidAddress(delegateAddress) || txStatus.status === 'pending';
   };
 
   const isSendDisabled = () => {
     const hasSignedTx = !!(window as any).signedTransaction;
-    const needsSimulation = selectedFunction !== 'authorization' && !isSimulated;
-    return !hasSignedTx || needsSimulation || txStatus.status === 'pending';
+    return !hasSignedTx || txStatus.status === 'pending';
   };
 
   const CopyNotification = ({ show, text }: { show: boolean; text: string }) => (
@@ -987,38 +324,7 @@ export const AuthorizationPage: React.FC = () => {
         text="Hash транзакции скопирован!" 
       />
       
-      <div className="grid grid-cols-12 gap-6">
-        {/* Function Selection */}
-        <div className="col-span-3">
-          <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-white mb-3">Функции</h3>
-            <div className="space-y-1">
-              {functions.map((func) => {
-                const IconComponent = func.icon;
-                return (
-                  <button
-                    key={func.id}
-                    onClick={() => {
-                      setSelectedFunction(func.id);
-                      resetSimulation();
-                    }}
-                    className={`w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
-                      selectedFunction === func.id
-                        ? 'bg-[#222225] text-white'
-                        : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                    }`}
-                  >
-                    <IconComponent className="w-4 h-4" />
-                    {func.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* Main Form */}
-        <div className="col-span-9 space-y-4">
+      <div className="space-y-4">
           {/* Network Selection */}
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-3">
@@ -1092,62 +398,8 @@ export const AuthorizationPage: React.FC = () => {
             )}
           </div>
 
-          {/* Function Parameters */}
-          {selectedFunction !== 'authorization' && (
-            <div className="bg-[#111111] border border-gray-800 rounded-lg p-4">
-              <h3 className="text-sm font-medium text-white mb-3">Параметры</h3>
-              {renderFunctionInputs()}
-            </div>
-          )}
-
           {/* Action Buttons */}
           <div className="space-y-2">
-            {selectedFunction !== 'authorization' && !isSimulated ? (
-              <button
-                onClick={handleSimulate}
-                disabled={isSimulateDisabled()}
-                className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {txStatus.status === 'pending' && txStatus.message.includes('Симуляция') ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Симуляция...
-                  </>
-                ) : (
-                  <>
-                    <Target className="w-4 h-4" />
-                    Симулировать
-                  </>
-                )}
-              </button>
-            ) : selectedFunction !== 'authorization' && isSimulated ? (
-              <div className="space-y-2">
-                <button
-                  onClick={handlePrepareAuthorization}
-                  disabled={isPrepareDisabled()}
-                  className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {txStatus.status === 'pending' && txStatus.message.includes('Подготовка') ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Подготовка...
-                    </>
-                  ) : (
-                    <>
-                      <Target className="w-4 h-4" />
-                      Подготовить авторизацию + функцию
-                    </>
-                  )}
-                </button>
-                <button
-                  onClick={resetSimulation}
-                  className="w-full bg-[#222225] text-white py-2 px-4 rounded text-sm font-medium hover:bg-[#2a2a2d] transition-colors flex items-center justify-center gap-2"
-                >
-                  <Target className="w-4 h-4" />
-                  Новая симуляция
-                </button>
-              </div>
-            ) : (
               <button
                 onClick={handlePrepareAuthorization}
                 disabled={isPrepareDisabled()}
@@ -1165,7 +417,6 @@ export const AuthorizationPage: React.FC = () => {
                   </>
                 )}
               </button>
-            )}
 
             <button
               onClick={handleSendTransaction}
@@ -1180,7 +431,7 @@ export const AuthorizationPage: React.FC = () => {
               ) : (
                 <>
                   <Send className="w-4 h-4" />
-                  {selectedFunction === 'authorization' ? 'Отправить авторизацию' : 'Отправить авторизацию + функцию'}
+                  Отправить авторизацию
                 </>
               )}
             </button>
@@ -1232,8 +483,6 @@ export const AuthorizationPage: React.FC = () => {
               )}
             </div>
           )}
-        </div>
-      </div>
     </div>
   );
 };
