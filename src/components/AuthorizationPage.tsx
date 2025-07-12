@@ -3,7 +3,7 @@ import { Shield, Send, Target, Loader2, CheckCircle, AlertCircle, ExternalLink, 
 import { ethers } from 'ethers';
 import { useEnvWallet } from '../hooks/useEnvWallet';
 import { tenderlySimulator } from '../utils/tenderly';
-import { getAllNetworks, getNetworkById, getTransactionUrl, getNetworkGasConfig } from '../config/networkConfig';
+import { getAllNetworks, getNetworkById, getTransactionUrl } from '../config/networkConfig';
 
 interface TransactionStatus {
   hash: string | null;
@@ -12,19 +12,43 @@ interface TransactionStatus {
   simulationUrl?: string;
 }
 
+interface AuthorizationData {
+  chainId: number;
+  address: string;
+  nonce: string;
+  yParity: string;
+  r: string;
+  s: string;
+}
+
+interface AuthorizationDetails {
+  userAddress: string;
+  delegateAddress: string;
+  userNonce: number;
+  chainId: number;
+  encodedAuth: string;
+  authHash: string;
+  signature: {
+    r: string;
+    s: string;
+    yParity: number;
+  };
+  authData: AuthorizationData;
+  signedTransaction: string;
+}
+
 export const AuthorizationPage: React.FC = () => {
   const { relayerWallet, provider, relayerAddress } = useEnvWallet();
   const [selectedNetwork, setSelectedNetwork] = useState<number>(56); // Default to BSC
   const [userPrivateKey, setUserPrivateKey] = useState('');
   const [userWallet, setUserWallet] = useState<ethers.Wallet | null>(null);
   const [delegateAddress, setDelegateAddress] = useState('');
-  const [gasLimit, setGasLimit] = useState('100000');
   const [txStatus, setTxStatus] = useState<TransactionStatus>({
     hash: null,
     status: 'idle',
     message: '',
   });
-  const [authorizationDetails, setAuthorizationDetails] = useState<any>(null);
+  const [authorizationDetails, setAuthorizationDetails] = useState<AuthorizationDetails | null>(null);
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
 
   const networks = getAllNetworks();
@@ -68,7 +92,7 @@ export const AuthorizationPage: React.FC = () => {
     return /^[0-9a-fA-F]{64}$/.test(cleanKey);
   };
 
-  const handleSimulate = async () => {
+  const handlePrepareAuthorization = async () => {
     if (!relayerWallet || !provider || !userWallet) {
       setTxStatus({
         hash: null,
@@ -90,104 +114,112 @@ export const AuthorizationPage: React.FC = () => {
     try {
       setTxStatus({ hash: null, status: 'pending', message: 'Подготовка авторизации...' });
 
-      const network = getNetworkById(selectedNetwork);
-      if (!network) {
-        throw new Error('Сеть не найдена');
-      }
+      console.log(`UserEOA: ${userWallet.address}`);
+      console.log(`Relayer: ${relayerAddress}`);
+      console.log(`Delegated Address: ${delegateAddress}`);
 
-      // Get user nonce
+      // 1. Получаем данные сети
       const userNonce = await provider.getTransactionCount(userWallet.address);
-      const chainId = selectedNetwork;
+      const network = await provider.getNetwork();
+      const chainId = Number(network.chainId);
 
-      setTxStatus({ hash: null, status: 'pending', message: 'Создание подписи авторизации...' });
+      console.log(`Chain ID: ${chainId}, User Nonce: ${userNonce}`);
 
-      // Create EIP-7702 authorization data
-      // EIP-7702 Authorization structure: [chainId, address, nonce]
-      const authTuple = [
-        chainId,           // Keep as number for RLP encoding
-        delegateAddress,   // Address as string
-        userNonce         // Keep as number for RLP encoding
-      ];
-
-      // Create authorization hash according to EIP-7702 spec
-      const encodedAuth = ethers.encodeRlp(authTuple);
-      const authHash = ethers.keccak256(encodedAuth);
-      
-      // Sign the authorization hash
-      const authSig = userWallet.signingKey.sign(authHash);
-
-      // Extract signature components
-      const signature = ethers.Signature.from(authSig);
-      
-      // Create EIP-7702 authorization object
-      const authorization = {
-        chainId: chainId,
+      // 2. Готовим EIP-7702 авторизацию (точно как в примере)
+      const authData = {
+        chainId,
         address: delegateAddress,
-        nonce: userNonce,
-        yParity: signature.yParity, // This should be 0 or 1
-        r: signature.r,
-        s: signature.s,
+        nonce: ethers.toBeHex(userNonce)
       };
 
-      setTxStatus({ hash: null, status: 'pending', message: 'Симуляция транзакции...' });
+      const encodedAuth = ethers.concat([
+        '0x05',
+        ethers.encodeRlp([
+          ethers.toBeHex(authData.chainId),
+          authData.address,
+          authData.nonce
+        ])
+      ]);
 
-      // Simulate with Tenderly if available
-      if (tenderlySimulator.isEnabled()) {
-        const simulationResult = await tenderlySimulator.simulateEIP7702Authorization(
-          chainId,
-          userWallet.address,
-          delegateAddress,
-          relayerAddress!,
-          authorization,
-          parseInt(gasLimit)
-        );
-        
-        if (simulationResult.success) {
-          setTxStatus({
-            hash: null,
-            status: 'success',
-            message: 'Симуляция прошла успешно. Можно отправить авторизацию.',
-            simulationUrl: simulationResult.simulationUrl,
-          });
-        } else {
-          setTxStatus({
-            hash: null,
-            status: 'error',
-            message: `Симуляция не прошла: ${simulationResult.error}`,
-            simulationUrl: simulationResult.simulationUrl,
-          });
-        }
-      } else {
-        setTxStatus({
-          hash: null,
-          status: 'success',
-          message: 'Авторизация подготовлена. Можно отправить транзакцию.',
-        });
-      }
+      const authHash = ethers.keccak256(encodedAuth);
+      const authSig = userWallet.signingKey.sign(authHash);
 
-      // Store authorization for execution
-      (window as any).pendingAuthorization = authorization;
-      
-      // Store authorization details for display
+      const finalAuthData: AuthorizationData = {
+        chainId: authData.chainId,
+        address: authData.address,
+        nonce: authData.nonce,
+        yParity: authSig.yParity === 0 ? '0x' : '0x01',
+        r: authSig.r,
+        s: authSig.s
+      };
+
+      console.log('Authorization data prepared:', finalAuthData);
+
+      // 3. Готовим пустую транзакцию от имени relayer
+      const relayerNonce = await provider.getTransactionCount(relayerAddress!);
+      const feeData = await provider.getFeeData();
+
+      const txData = [
+        ethers.toBeHex(finalAuthData.chainId),
+        ethers.toBeHex(relayerNonce),
+        ethers.toBeHex(feeData.maxPriorityFeePerGas || ethers.parseUnits('2', 'gwei')),
+        ethers.toBeHex(feeData.maxFeePerGas || ethers.parseUnits('50', 'gwei')),
+        ethers.toBeHex(100000), // достаточно газа для передачи
+        userWallet.address,     // sender (delegator)
+        '0x',                   // to (пусто)
+        '0x',                   // data (пусто)
+        [],                     // accessList
+        [[
+          ethers.toBeHex(finalAuthData.chainId),
+          finalAuthData.address,
+          finalAuthData.nonce,
+          finalAuthData.yParity,
+          finalAuthData.r,
+          finalAuthData.s
+        ]]
+      ];
+
+      // 4. Подпись relayer'ом
+      const encodedTx = ethers.encodeRlp(txData);
+      const txHash = ethers.keccak256(ethers.concat(['0x04', encodedTx]));
+      const relayerSig = relayerWallet.signingKey.sign(txHash);
+
+      const signedTx = ethers.hexlify(ethers.concat([
+        '0x04',
+        ethers.encodeRlp([
+          ...txData,
+          relayerSig.yParity === 0 ? '0x' : '0x01',
+          relayerSig.r,
+          relayerSig.s
+        ])
+      ]));
+
+      console.log('Signed transaction prepared:', signedTx);
+
+      // Сохраняем детали для отображения
       setAuthorizationDetails({
-        originalData: {
-          chainId: chainId,
-          address: delegateAddress,
-          nonce: userNonce
-        },
+        userAddress: userWallet.address,
+        delegateAddress: delegateAddress,
+        userNonce: userNonce,
+        chainId: chainId,
         encodedAuth: ethers.hexlify(encodedAuth),
         authHash: authHash,
-        signature: authSig.serialized,
-        parsedSignature: {
-          r: signature.r,
-          s: signature.s,
-          yParity: signature.yParity,
-          v: signature.v
+        signature: {
+          r: authSig.r,
+          s: authSig.s,
+          yParity: authSig.yParity
         },
-        finalAuthorization: authorization,
-        recoveredAddress: ethers.recoverAddress(authHash, signature),
-        userAddress: userWallet.address,
-        isValidSignature: ethers.recoverAddress(authHash, signature).toLowerCase() === userWallet.address.toLowerCase()
+        authData: finalAuthData,
+        signedTransaction: signedTx
+      });
+
+      // Сохраняем подписанную транзакцию для отправки
+      (window as any).signedTransaction = signedTx;
+
+      setTxStatus({
+        hash: null,
+        status: 'success',
+        message: 'Авторизация подготовлена успешно. Можно отправить транзакцию.',
       });
 
     } catch (error) {
@@ -200,22 +232,22 @@ export const AuthorizationPage: React.FC = () => {
     }
   };
 
-  const handleExecute = async () => {
-    if (!relayerWallet || !provider || !userWallet) {
+  const handleSendTransaction = async () => {
+    if (!provider) {
       setTxStatus({
         hash: null,
         status: 'error',
-        message: 'Конфигурация неполная',
+        message: 'Provider не настроен',
       });
       return;
     }
 
-    const authorization = (window as any).pendingAuthorization;
-    if (!authorization) {
+    const signedTx = (window as any).signedTransaction;
+    if (!signedTx) {
       setTxStatus({
         hash: null,
         status: 'error',
-        message: 'Сначала выполните симуляцию',
+        message: 'Сначала подготовьте авторизацию',
       });
       return;
     }
@@ -223,69 +255,23 @@ export const AuthorizationPage: React.FC = () => {
     try {
       setTxStatus({ hash: null, status: 'pending', message: 'Отправка авторизации...' });
 
-      const network = getNetworkById(selectedNetwork);
-      if (!network) {
-        throw new Error('Сеть не найдена');
-      }
+      // 5. Отправка делегационной транзакции
+      const txHash = await provider.send('eth_sendRawTransaction', [signedTx]);
+      
+      console.log(`Delegation authorized. Transaction hash: ${txHash}`);
 
-      // Get current gas prices
-      const feeData = await provider.getFeeData();
-      const relayerNonce = await provider.getTransactionCount(relayerAddress!);
-
-      // Try to send EIP-7702 transaction (type 4)
-      try {
-        const eip7702Tx = {
-          type: 4, // EIP-7702 transaction type
-          chainId: selectedNetwork,
-          nonce: relayerNonce,
-          maxPriorityFeePerGas: feeData.maxPriorityFeePerGas || ethers.parseUnits('2', 'gwei'),
-          maxFeePerGas: feeData.maxFeePerGas || ethers.parseUnits('50', 'gwei'),
-          gasLimit: parseInt(gasLimit),
-          to: userWallet.address,
-          value: 0,
-          data: '0x',
-          accessList: [],
-          authorizationList: [authorization],
-        };
-
-        console.log('Sending EIP-7702 transaction:', eip7702Tx);
-        
-        // This will likely fail as EIP-7702 is not yet implemented
-        const tx = await relayerWallet.sendTransaction(eip7702Tx);
-        
-        setTxStatus({
-          hash: tx.hash,
-          status: 'success',
-          message: 'EIP-7702 авторизация отправлена успешно!',
-        });
-
-      } catch (eip7702Error) {
-        console.log('EIP-7702 not supported, falling back to regular transaction');
-        
-        // Fallback: send a regular transaction to demonstrate the concept
-        const fallbackTx = await relayerWallet.sendTransaction({
-          to: userWallet.address,
-          value: 0,
-          data: ethers.concat([
-            '0x', // Empty data
-            ethers.toUtf8Bytes(`EIP-7702 Authorization: ${delegateAddress}`)
-          ]),
-          gasLimit: parseInt(gasLimit),
-        });
-
-        setTxStatus({
-          hash: fallbackTx.hash,
-          status: 'success',
-          message: 'Авторизация отправлена (демо режим - EIP-7702 еще не поддерживается)',
-        });
-      }
+      setTxStatus({
+        hash: txHash,
+        status: 'success',
+        message: 'EIP-7702 авторизация отправлена успешно!',
+      });
 
     } catch (error) {
-      console.error('Authorization execution failed:', error);
+      console.error('Transaction failed:', error);
       setTxStatus({
         hash: null,
         status: 'error',
-        message: error instanceof Error ? error.message : 'Ошибка выполнения авторизации',
+        message: error instanceof Error ? error.message : 'Ошибка отправки транзакции',
       });
     }
   };
@@ -326,12 +312,12 @@ export const AuthorizationPage: React.FC = () => {
     }
   };
 
-  const isSimulateDisabled = () => {
+  const isPrepareDisabled = () => {
     return !relayerWallet || !provider || !userWallet || !isValidAddress(delegateAddress) || txStatus.status === 'pending';
   };
 
-  const isExecuteDisabled = () => {
-    return !relayerWallet || !provider || !userWallet || txStatus.status !== 'success' || txStatus.status === 'pending';
+  const isSendDisabled = () => {
+    return !authorizationDetails || txStatus.status === 'pending';
   };
 
   const CopyNotification = ({ show, text }: { show: boolean; text: string }) => (
@@ -355,16 +341,8 @@ export const AuthorizationPage: React.FC = () => {
         text="Hash транзакции скопирован!" 
       />
       <CopyNotification 
-        show={copiedItem === 'authorization-json'} 
-        text="JSON авторизации скопирован!" 
-      />
-      <CopyNotification 
-        show={copiedItem === 'auth-hash'} 
-        text="Хеш авторизации скопирован!" 
-      />
-      <CopyNotification 
-        show={copiedItem === 'signature'} 
-        text="Подпись скопирована!" 
+        show={copiedItem === 'signed-tx'} 
+        text="Подписанная транзакция скопирована!" 
       />
 
       {/* Network Selection */}
@@ -450,28 +428,11 @@ export const AuthorizationPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Gas Settings */}
-      <div className="bg-[#111111] border border-gray-800 rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Настройки газа</h3>
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Gas Limit
-          </label>
-          <input
-            type="number"
-            value={gasLimit}
-            onChange={(e) => setGasLimit(e.target.value)}
-            placeholder="100000"
-            className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
-          />
-        </div>
-      </div>
-
       {/* Action Buttons */}
       <div className="space-y-3">
         <button
-          onClick={handleSimulate}
-          disabled={isSimulateDisabled()}
+          onClick={handlePrepareAuthorization}
+          disabled={isPrepareDisabled()}
           className="w-full bg-gradient-to-r from-gray-600 to-gray-700 text-white py-3 px-6 rounded-lg font-medium hover:from-gray-700 hover:to-gray-800 transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
         >
           {txStatus.status === 'pending' && txStatus.message.includes('Подготовка') ? (
@@ -488,8 +449,8 @@ export const AuthorizationPage: React.FC = () => {
         </button>
 
         <button
-          onClick={handleExecute}
-          disabled={isExecuteDisabled()}
+          onClick={handleSendTransaction}
+          disabled={isSendDisabled()}
           className="w-full bg-gradient-to-r from-gray-600 to-gray-700 text-white py-3 px-6 rounded-lg font-medium hover:from-gray-700 hover:to-gray-800 transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
         >
           {txStatus.status === 'pending' && txStatus.message.includes('Отправка') ? (
@@ -500,7 +461,7 @@ export const AuthorizationPage: React.FC = () => {
           ) : (
             <>
               <Send className="w-5 h-5" />
-              Выполнить авторизацию
+              Отправить авторизацию
             </>
           )}
         </button>
@@ -541,17 +502,6 @@ export const AuthorizationPage: React.FC = () => {
               })()}
             </div>
           )}
-          {txStatus.simulationUrl && (
-            <a
-              href={txStatus.simulationUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-gray-400 hover:text-white text-xs mt-2"
-            >
-              <ExternalLink className="w-3 h-3" />
-              Посмотреть симуляцию в Tenderly
-            </a>
-          )}
         </div>
       )}
 
@@ -564,36 +514,40 @@ export const AuthorizationPage: React.FC = () => {
           </div>
           
           <div className="space-y-4 text-sm">
-            {/* Original Data */}
+            {/* Basic Info */}
             <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
-              <h4 className="text-white font-medium mb-2">Исходные данные:</h4>
+              <h4 className="text-white font-medium mb-2">Основная информация:</h4>
               <div className="space-y-1 font-mono text-xs">
                 <div className="flex justify-between">
+                  <span className="text-gray-400">User Address:</span>
+                  <span className="text-white break-all">{authorizationDetails.userAddress}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Delegate Address:</span>
+                  <span className="text-white break-all">{authorizationDetails.delegateAddress}</span>
+                </div>
+                <div className="flex justify-between">
                   <span className="text-gray-400">Chain ID:</span>
-                  <span className="text-white">{authorizationDetails.originalData.chainId}</span>
+                  <span className="text-white">{authorizationDetails.chainId}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-400">Address:</span>
-                  <span className="text-white break-all">{authorizationDetails.originalData.address}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Nonce:</span>
-                  <span className="text-white">{authorizationDetails.originalData.nonce}</span>
+                  <span className="text-gray-400">User Nonce:</span>
+                  <span className="text-white">{authorizationDetails.userNonce}</span>
                 </div>
               </div>
             </div>
 
-            {/* RLP Encoded Data */}
+            {/* Encoded Authorization */}
             <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
-              <h4 className="text-white font-medium mb-2">RLP кодированные данные:</h4>
+              <h4 className="text-white font-medium mb-2">Закодированная авторизация:</h4>
               <div className="font-mono text-xs text-white break-all bg-gray-900 p-2 rounded">
                 {authorizationDetails.encodedAuth}
               </div>
             </div>
 
-            {/* Hash */}
+            {/* Authorization Hash */}
             <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
-              <h4 className="text-white font-medium mb-2">Хеш для подписи:</h4>
+              <h4 className="text-white font-medium mb-2">Хеш авторизации:</h4>
               <div className="font-mono text-xs text-white break-all bg-gray-900 p-2 rounded">
                 {authorizationDetails.authHash}
               </div>
@@ -602,81 +556,42 @@ export const AuthorizationPage: React.FC = () => {
             {/* Signature */}
             <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
               <h4 className="text-white font-medium mb-2">Подпись:</h4>
-              <div className="space-y-2">
-                <div className="font-mono text-xs text-white break-all bg-gray-900 p-2 rounded">
-                  {authorizationDetails.signature}
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span className="text-gray-400">r:</span>
+                  <div className="font-mono text-white break-all">{authorizationDetails.signature.r}</div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <span className="text-gray-400">r:</span>
-                    <div className="font-mono text-white break-all">{authorizationDetails.parsedSignature.r}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">s:</span>
-                    <div className="font-mono text-white break-all">{authorizationDetails.parsedSignature.s}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">yParity:</span>
-                    <div className="font-mono text-white">{authorizationDetails.parsedSignature.yParity}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">v:</span>
-                    <div className="font-mono text-white">{authorizationDetails.parsedSignature.v}</div>
-                  </div>
+                <div>
+                  <span className="text-gray-400">s:</span>
+                  <div className="font-mono text-white break-all">{authorizationDetails.signature.s}</div>
+                </div>
+                <div>
+                  <span className="text-gray-400">yParity:</span>
+                  <div className="font-mono text-white">{authorizationDetails.signature.yParity}</div>
                 </div>
               </div>
             </div>
 
-            {/* Verification */}
+            {/* Final Authorization Data */}
             <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
-              <h4 className="text-white font-medium mb-2">Проверка подписи:</h4>
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Адрес пользователя:</span>
-                  <span className="text-white font-mono">{authorizationDetails.userAddress}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Восстановленный адрес:</span>
-                  <span className="text-white font-mono">{authorizationDetails.recoveredAddress}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Подпись валидна:</span>
-                  <span className={`font-medium ${authorizationDetails.isValidSignature ? 'text-green-400' : 'text-red-400'}`}>
-                    {authorizationDetails.isValidSignature ? '✅ Да' : '❌ Нет'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Final Authorization */}
-            <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
-              <h4 className="text-white font-medium mb-2">Финальная авторизация (EIP-7702):</h4>
+              <h4 className="text-white font-medium mb-2">Финальные данные авторизации:</h4>
               <pre className="font-mono text-xs text-white bg-gray-900 p-2 rounded overflow-x-auto">
-{JSON.stringify(authorizationDetails.finalAuthorization, null, 2)}
+{JSON.stringify(authorizationDetails.authData, null, 2)}
               </pre>
             </div>
-            {/* Copy Buttons */}
-            <div className="flex gap-2 flex-wrap">
+
+            {/* Signed Transaction */}
+            <div className="bg-[#0a0a0a] border border-gray-700 rounded-lg p-4">
+              <h4 className="text-white font-medium mb-2">Подписанная транзакция:</h4>
+              <div className="font-mono text-xs text-white break-all bg-gray-900 p-2 rounded max-h-32 overflow-y-auto">
+                {authorizationDetails.signedTransaction}
+              </div>
               <button
-                onClick={() => copyToClipboard(JSON.stringify(authorizationDetails.finalAuthorization, null, 2), 'authorization-json')}
-                className="px-3 py-1 bg-[#222225] text-white rounded text-xs hover:bg-[#2a2a2d] transition-colors flex items-center gap-1"
+                onClick={() => copyToClipboard(authorizationDetails.signedTransaction, 'signed-tx')}
+                className="mt-2 px-3 py-1 bg-[#222225] text-white rounded text-xs hover:bg-[#2a2a2d] transition-colors flex items-center gap-1"
               >
                 <Copy className="w-3 h-3" />
-                Копировать JSON
-              </button>
-              <button
-                onClick={() => copyToClipboard(authorizationDetails.authHash, 'auth-hash')}
-                className="px-3 py-1 bg-[#222225] text-white rounded text-xs hover:bg-[#2a2a2d] transition-colors flex items-center gap-1"
-              >
-                <Copy className="w-3 h-3" />
-                Копировать хеш
-              </button>
-              <button
-                onClick={() => copyToClipboard(authorizationDetails.signature, 'signature')}
-                className="px-3 py-1 bg-[#222225] text-white rounded text-xs hover:bg-[#2a2a2d] transition-colors flex items-center gap-1"
-              >
-                <Copy className="w-3 h-3" />
-                Копировать подпись
+                Копировать транзакцию
               </button>
             </div>
           </div>
