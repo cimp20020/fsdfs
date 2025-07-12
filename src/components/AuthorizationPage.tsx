@@ -333,19 +333,30 @@ export const AuthorizationPage: React.FC = () => {
       }
 
       // 4. Подпись relayer'ом
-      const encodedTx = ethers.encodeRlp(txData);
-      const txHash = ethers.keccak256(ethers.concat(['0x04', encodedTx]));
-      const relayerSig = relayerWallet.signingKey.sign(txHash);
+      // Создаем транзакцию через ethers.Transaction для корректного EIP-7702 кодирования
+      const unsignedTx = {
+        type: 4, // EIP-7702
+        chainId: finalAuthData.chainId,
+        nonce: relayerNonce,
+        maxPriorityFeePerGas: feeData.maxPriorityFeePerGas || ethers.parseUnits('2', 'gwei'),
+        maxFeePerGas: feeData.maxFeePerGas || ethers.parseUnits('50', 'gwei'),
+        gasLimit: txData[4], // gasLimit from txData
+        to: txData[5], // to address from txData
+        value: txData[6], // value from txData
+        data: txData[7], // data from txData
+        accessList: [], // empty access list
+        authorizationList: [[
+          finalAuthData.chainId,
+          finalAuthData.address,
+          finalAuthData.nonce,
+          finalAuthData.yParity,
+          finalAuthData.r,
+          finalAuthData.s
+        ]]
+      };
 
-      const signedTx = ethers.hexlify(ethers.concat([
-        '0x04',
-        ethers.encodeRlp([
-          ...txData,
-          ethers.toBeHex(relayerSig.yParity),
-          relayerSig.r,
-          relayerSig.s
-        ])
-      ]));
+      // Подписываем транзакцию через ethers
+      const signedTx = await relayerWallet.signTransaction(unsignedTx);
 
       console.log('Signed transaction prepared:', signedTx);
 
