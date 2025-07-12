@@ -483,6 +483,7 @@ export const AuthorizationPage: React.FC = () => {
               )}
             </div>
           )}
+      </div>
     </div>
   );
 };
