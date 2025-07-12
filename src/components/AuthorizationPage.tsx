@@ -165,7 +165,7 @@ export const AuthorizationPage: React.FC = () => {
         ethers.toBeHex(relayerNonce),
         ethers.toBeHex(ethers.parseUnits(customMaxPriorityFee || '2', 'gwei')),
         ethers.toBeHex(ethers.parseUnits(customMaxFee || '50', 'gwei')),
-        ethers.toBeHex(customGasLimit2 || '100000'), // достаточно газа для передачи
+        ethers.toBeHex(customGasLimit || '100000'), // достаточно газа для передачи
         userWallet.address,     // sender (delegator)
         '0x',                   // to (пусто)
         '0x',                   // data (пусто)
@@ -453,7 +453,7 @@ export const AuthorizationPage: React.FC = () => {
       <label className="text-xs text-gray-400">Gas Limit</label>
       <input
         type="number"
-        value={customGasLimit2}
+        value={customGasLimit}
         onChange={(e) => setCustomGasLimit(e.target.value)}
         className="w-full bg-[#0a0a0a] border border-gray-700 rounded px-3 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
         placeholder="100000"
